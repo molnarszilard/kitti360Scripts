@@ -28,7 +28,7 @@ MAX_N = 1000
 def local2global(semanticId, instanceId):
     globalId = semanticId*MAX_N + instanceId
     if isinstance(globalId, np.ndarray):
-        return globalId.astype(np.int)
+        return globalId.astype(int)
     else:
         return int(globalId)
 
@@ -36,7 +36,7 @@ def global2local(globalId):
     semanticId = globalId // MAX_N
     instanceId = globalId % MAX_N
     if isinstance(globalId, np.ndarray):
-        return semanticId.astype(np.int), instanceId.astype(np.int)
+        return semanticId.astype(int), instanceId.astype(int)
     else:
         return int(semanticId), int(instanceId)
 
@@ -229,7 +229,7 @@ class Annotation2D:
     # Load confidence map
     def loadConfidence(self, imgPath):
         self.confidenceMap = io.imread(imgPath)
-        self.confidenceMap = np.asarray(self.confidenceMap).astype(np.float)/255.
+        self.confidenceMap = np.asarray(self.confidenceMap).astype(float)/255.
 
     # Load instance id 
     def loadInstance(self, imgPath, gtType='instance', toImg=True, contourType='instance', semanticCt=True, instanceCt=True):
@@ -403,7 +403,10 @@ class Annotation3D:
                     return None
             # dynamic object
             else:
-                return self.objects[globalId][timestamp]
+                if timestamp in self.objects[globalId].keys():
+                    return self.objects[globalId][timestamp]
+                else:
+                    return None
         else:
             return None
 

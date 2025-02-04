@@ -203,7 +203,7 @@ def generateCroppedGroundTruth(rootPath, accumulatedPcdFile, outputFile, disThre
     return True
 
 def getCellCoordinates(points, voxelSize):
-    return (points / voxelSize).astype(np.int)
+    return (points / voxelSize).astype(int)
 
 def getNumUniqueCells(cells):
     M = cells.max() + 1
@@ -695,7 +695,7 @@ def id2trainIdImg(img):
 def writeResultPointCloud(predictionNp, predictionSemantic, accuracyMask, observedMask, visualizeIdx, maxNumPoint=10000):
     import plotly.offline
     import plotly.graph_objects as go
-    interval = np.ceil(predictionNp.shape[0]/maxNumPoint).astype(np.int)
+    interval = np.ceil(predictionNp.shape[0]/maxNumPoint).astype(int)
     x,y,z = predictionNp[::interval,:].T
     layout = go.Layout(scene=dict(aspectmode="data"))
 

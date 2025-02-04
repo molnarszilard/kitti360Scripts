@@ -31,7 +31,7 @@ except:
 # the label tool was originally written for python 2 and pyqt4
 # in order to enable compatibility with python 3, we need
 # to fix the pyqt api to the old version that is default in py2
-import sip
+from PyQt5 import sip
 apis = ['QDate', 'QDateTime', 'QString', 'QTextStream', 'QTime', 'QUrl', 'QVariant']
 for a in apis:
     sip.setapi(a, 1)
@@ -1019,8 +1019,10 @@ class Kitti360Viewer(QtWidgets.QMainWindow):
         if 'KITTI360_DATASET' in os.environ:
             kitti360Path = os.environ['KITTI360_DATASET']
         else:
-            kitti360Path = os.path.join(os.path.dirname(
-                                os.path.realpath(__file__)), '..', '..')
+            # kitti360Path='/mnt/storage/Workspace/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/'
+            kitti360Path='/mnt/storage/Downloads/kitti/KITTI-360/'
+            # kitti360Path = os.path.join(os.path.dirname(
+                                # os.path.realpath(__file__)), '..', '..')
 
         imagePath = os.path.join(kitti360Path, 'data_2d_raw')
         label2DPath = os.path.join(kitti360Path, 'data_2d_semantics', 'train')
@@ -1053,7 +1055,7 @@ class Kitti360Viewer(QtWidgets.QMainWindow):
                 sequence = item
                 self.currentSequence = sequence
                 self.sequence = os.path.normpath(os.path.join(imagePath, sequence, "image_%02d" % self.cameraId, "data_rect"))
-                self.labelPath = os.path.normpath(os.path.join(label2DPath, sequence))
+                self.labelPath = os.path.normpath(os.path.join(label2DPath, sequence, "image_%02d" % self.cameraId))
                 self.annotation2DInstance = Annotation2DInstance(os.path.join(label2DPath, sequence))
                 self.annotation3D = Annotation3D(label3DBboxPath, sequence)
 

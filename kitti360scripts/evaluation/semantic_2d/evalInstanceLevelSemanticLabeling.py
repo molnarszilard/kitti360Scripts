@@ -444,7 +444,7 @@ def evaluateMatches(matches, args):
 
     # Here we hold the results
     # First dimension is class, second overlap
-    ap = np.zeros( (len(distThs) , len(args.instLabels) , len(overlaps)) , np.float )
+    ap = np.zeros( (len(distThs) , len(args.instLabels) , len(overlaps)) , float )
 
     for dI,(minRegionSize,distanceTh,distanceConf) in enumerate(zip(minRegionSizes,distThs,distConfs)):
         for (oI,overlapTh) in enumerate(overlaps):

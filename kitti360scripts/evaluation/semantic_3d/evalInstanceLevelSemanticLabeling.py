@@ -281,7 +281,7 @@ def evaluateMatches(matches, args):
     dist_confs = [args.distanceConfs[0]]
 
     # results: class x overlap
-    ap = np.zeros((len(dist_threshes), len(args.validClassLabels), len(overlaps)), np.float)
+    ap = np.zeros((len(dist_threshes), len(args.validClassLabels), len(overlaps)), float)
     for di, (min_region_size, distance_thresh, distance_conf) in enumerate(zip(min_region_sizes, dist_threshes, dist_confs)):
         for oi, overlap_th in enumerate(overlaps):
             pred_visited = {}
