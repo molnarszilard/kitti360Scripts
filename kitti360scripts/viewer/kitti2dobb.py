@@ -91,14 +91,14 @@ def process(instances):
         frame = int(os.path.splitext(instance_name)[0])
         if frame%10:
             continue
-        if frame!=1250:
-            continue
+        # if frame!=1250:
+        #     continue
         ### camera_tr --> Tr(cam_0 -> world)
         camera_tr = camera.cam2world[frame]
         camera_R = camera_tr[:3, :3]
         ### From https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
         camera_angleZ = -math.atan2(camera_R[1,0],camera_R[0,0])#-math.pi/2
-        
+        print("Frame: %d, Cam: %f"%(frame,math.degrees(camera_angleZ)))
         img_instance = cv2.imread(os.path.join(kitti_instances,instance_name), -1)
         H,W = img_instance.shape
         if not os.path.exists(os.path.join(kitti_image,instance_name)):
@@ -120,53 +120,20 @@ def process(instances):
                 if not obj.name in chosen_classes:
                     continue
                 ### obj.R --> R(object -> world)
-                angle_dpt=-math.atan2(obj.R[1,0],obj.R[0,0])#-camera_angleZ
-                
-                print("Frame: %d, Cam: %f, dir_angle_1: %f"%(frame,math.degrees(camera_angleZ),math.degrees(angle_dpt-camera_angleZ)))
-                dx=math.cos(angle_dpt)
-                dy=math.sin(angle_dpt)
-                dir_vect = np.matmul(np.array([dx,dy,0]),np.linalg.inv(camera_R))
-                pred_dp_angle = math.atan2(dir_vect[0],dir_vect[1])
-                print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(dir_vect[0],dir_vect[2])
-                print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(dir_vect[1],dir_vect[0])
-                print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(dir_vect[1],dir_vect[2])
-                print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(dir_vect[2],dir_vect[0])
-                print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(-dir_vect[2],-dir_vect[1])
-                print(math.degrees(pred_dp_angle))
-                angle_diff = abs(math.atan2(math.sin((angle_dpt-camera_angleZ) - pred_dp_angle),math.cos((angle_dpt-camera_angleZ) - pred_dp_angle)))
-                print(math.degrees(angle_diff))
-
-
-                ### R(object -> cam_0)=R(object -> world)*(Tr(cam_0 -> world))^(-1)
-                R_o2c = np.matmul(obj.R, np.linalg.inv(camera_R))
-                # R_o2c = np.matmul(camera_R, np.linalg.inv(obj.R))
-                # R_o2c = np.matmul(np.linalg.inv(obj.R),camera_R)
-                # R_o2c = np.matmul(np.linalg.inv(camera_R),obj.R)
-
-                # print("from rot matrix")
-                # beta=-math.atan2(-R_o2c[2,0],math.sqrt(R_o2c[0,0]**2+R_o2c[1,0]**2))
-                # print(math.degrees(beta))
-                # alpha=-math.atan2(R_o2c[2,1]/math.cos(beta),R_o2c[2,2]/math.cos(beta))
-                # print(math.degrees(alpha))
-                # gamma=-math.atan2(R_o2c[1,0]/math.cos(beta),R_o2c[0,0]/math.cos(beta))
-                # print(math.degrees(gamma))
+                # angle_dpt=-math.atan2(obj.R[1,0],obj.R[0,0])#-camera_angleZ
 
                 Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
-                new_vertices = np.zeros_like(obj.vertices)
-                for i in range(len(new_vertices)):
-                    test = np.zeros((4),dtype=np.float64)
-                    test[:3]=np.array([obj.vertices[i,0]-(min(obj.vertices[:,0])+max(obj.vertices[:,0]))/2,obj.vertices[i,1]-(min(obj.vertices[:,1])+max(obj.vertices[:,1]))/2,obj.vertices[i,2]-(min(obj.vertices[:,2])+max(obj.vertices[:,2]))/2])
-                    test[3]=1.0
-                    new_vertices[i,:] = np.matrix.transpose(np.matmul(Tr_obj2world,test))[:3]
+                
+                objX0w=np.matmul(Tr_obj2world,np.array([0.0,0.0,0.0,1.0]))
+                objX1w=np.matmul(Tr_obj2world,np.array([1.0,0.0,0.0,1.0]))
 
-                camZ2W=np.matmul(camera_tr,np.array([0.0,0.0,1.0,1.0]))
-                camZ2Wcenter=np.matmul(camera_tr,np.array([0.0,0.0,0.0,1.0]))
-                camZ2W2=np.matmul(camera_tr,np.array([0.0,0.0,10.0,1.0]))
+                objX0c=np.matmul(np.linalg.inv(camera_tr),objX0w)
+                objX1c=np.matmul(np.linalg.inv(camera_tr),objX1w)
+
+                angle_dpt = -math.atan2(objX1c[2]-objX0c[2],objX1c[0]-objX0c[0])
+                # print(math.degrees(angle_dpt))
+                # angle_diff = abs(math.atan2(math.sin((angle_dpt-camera_angleZ) - angle_dpt),math.cos((angle_dpt-camera_angleZ) - angle_dpt)))
+                # print(math.degrees(angle_diff))
 
                 mask_instance = np.zeros_like(img_instance,dtype=np.uint8)
                 mask_instance[img_instance==s_id*N+i_id] = 255
