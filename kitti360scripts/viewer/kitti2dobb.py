@@ -10,6 +10,8 @@ from kitti360scripts.helpers.project import CameraPerspective as Camera
 from multiprocessing import Process
 import argparse
 
+np.set_printoptions(suppress=True, precision=6)
+
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--kitti_root',default='/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/',
                     help='the root of the kitti folder of original data')
@@ -124,17 +126,17 @@ def process(instances):
                 dx=math.cos(angle_dpt)
                 dy=math.sin(angle_dpt)
                 dir_vect = np.matmul(np.array([dx,dy,0]),np.linalg.inv(camera_R))
-                # pred_dp_angle = math.atan2(dir_vect[0],dir_vect[1])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[0],dir_vect[2])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[1],dir_vect[0])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[1],dir_vect[2])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[2],dir_vect[0])
-                # print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(dir_vect[2],dir_vect[1])-math.pi
+                pred_dp_angle = math.atan2(dir_vect[0],dir_vect[1])
+                print(math.degrees(pred_dp_angle))
+                pred_dp_angle = math.atan2(dir_vect[0],dir_vect[2])
+                print(math.degrees(pred_dp_angle))
+                pred_dp_angle = math.atan2(dir_vect[1],dir_vect[0])
+                print(math.degrees(pred_dp_angle))
+                pred_dp_angle = math.atan2(dir_vect[1],dir_vect[2])
+                print(math.degrees(pred_dp_angle))
+                pred_dp_angle = math.atan2(dir_vect[2],dir_vect[0])
+                print(math.degrees(pred_dp_angle))
+                pred_dp_angle = math.atan2(-dir_vect[2],-dir_vect[1])
                 print(math.degrees(pred_dp_angle))
                 angle_diff = abs(math.atan2(math.sin((angle_dpt-camera_angleZ) - pred_dp_angle),math.cos((angle_dpt-camera_angleZ) - pred_dp_angle)))
                 print(math.degrees(angle_diff))
@@ -153,6 +155,18 @@ def process(instances):
                 # print(math.degrees(alpha))
                 # gamma=-math.atan2(R_o2c[1,0]/math.cos(beta),R_o2c[0,0]/math.cos(beta))
                 # print(math.degrees(gamma))
+
+                Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
+                new_vertices = np.zeros_like(obj.vertices)
+                for i in range(len(new_vertices)):
+                    test = np.zeros((4),dtype=np.float64)
+                    test[:3]=np.array([obj.vertices[i,0]-(min(obj.vertices[:,0])+max(obj.vertices[:,0]))/2,obj.vertices[i,1]-(min(obj.vertices[:,1])+max(obj.vertices[:,1]))/2,obj.vertices[i,2]-(min(obj.vertices[:,2])+max(obj.vertices[:,2]))/2])
+                    test[3]=1.0
+                    new_vertices[i,:] = np.matrix.transpose(np.matmul(Tr_obj2world,test))[:3]
+
+                camZ2W=np.matmul(camera_tr,np.array([0.0,0.0,1.0,1.0]))
+                camZ2Wcenter=np.matmul(camera_tr,np.array([0.0,0.0,0.0,1.0]))
+                camZ2W2=np.matmul(camera_tr,np.array([0.0,0.0,10.0,1.0]))
 
                 mask_instance = np.zeros_like(img_instance,dtype=np.uint8)
                 mask_instance[img_instance==s_id*N+i_id] = 255

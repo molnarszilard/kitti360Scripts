@@ -121,9 +121,7 @@ def process(instances):
                 ### obj.R --> R(object -> world)
                 angle_dpt=-math.atan2(obj.R[1,0],obj.R[0,0])-camera_angleZ    
                 vertices=obj.vertices
-                ### The 3D BB has 8 points described by vertices: obj.vertices, which are transformed using the obj.R and obj.T matrices
-                Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]]])
-                vertices = np.matmul(vertices,Tr_obj2world)
+                ### The 3D BB has 8 points described by vertices: obj.vertices, which are in the world coordinate frame
                 ### Save the vertices and the direction angle into a txt file. Every frame has a separate file, every object has a separate line
                 fl.write("%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"%(vertices[0,0],vertices[0,1],vertices[0,2],vertices[1,0],vertices[1,1],vertices[1,2],vertices[2,0],vertices[2,1],vertices[2,2],vertices[3,0],vertices[3,1],vertices[3,2],vertices[4,0],vertices[4,1],vertices[4,2],vertices[5,0],vertices[5,1],vertices[5,2],vertices[6,0],vertices[6,1],vertices[6,2],vertices[7,0],vertices[7,1],vertices[7,2],angle_dpt))
         fl.close()
