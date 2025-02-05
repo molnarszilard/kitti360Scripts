@@ -53,12 +53,12 @@ camera = Camera(root_dir=args.kitti_root, seq=args.sequence)
 
 ### Creating Output structure
 base=os.path.join(args.result_folder,args.sequence)
-new_images='images/'
+# new_images='images/'
 new_labels='labels/'
 if not os.path.exists(os.path.join(base,new_labels)):
     os.makedirs(os.path.join(base,new_labels))
-if not os.path.exists(os.path.join(base,new_images)):
-    os.makedirs(os.path.join(base,new_images))
+# if not os.path.exists(os.path.join(base,new_images)):
+#     os.makedirs(os.path.join(base,new_images))
 
 def list_points(matrix,value):
     lines_points = []
@@ -87,27 +87,24 @@ def xywhr2xyxyxyxy(rboxes):
 def process(instances):
     for instance_name in instances:
         frame = int(os.path.splitext(instance_name)[0])
+        print("Frame: %d"%(frame))
         if frame%10:
             continue
-        if frame!=1250:
-            continue
+        ### Read the camera Transformation matrix per the current frame
         ### camera_tr --> Tr(cam_0 -> world)
         camera_tr = camera.cam2world[frame]
         camera_R = camera_tr[:3, :3]
-        ### From https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
-        camera_angleZ = -math.atan2(camera_R[1,0],camera_R[0,0])#-math.pi/2
-        
+        ### THe K matrix of the camera
+        camera_K = camera.K
+        camera_height = camera.height
+        camera_width = camera.width
+        ### The camera rotation along the Z(up) axis in the worl coordinate system
+        camera_angleZ = -math.atan2(camera_R[1,0],camera_R[0,0])
         img_instance = cv2.imread(os.path.join(kitti_instances,instance_name), -1)
-        H,W = img_instance.shape
-        if not os.path.exists(os.path.join(kitti_image,instance_name)):
-            exit()
-        else:
-            img_rgb = cv2.imread(os.path.join(kitti_image,instance_name))
+        ### Save the new annotation file
         new_label_path = os.path.join(base,new_labels,instance_name[:-3]+'txt')
-        new_image_path = os.path.join(base,new_images,instance_name)
-        cv2.imwrite(new_image_path,img_rgb)
-        fl = open(new_label_path, "w")
-        
+        fl = open(new_label_path, "w")   
+        ### get the unique IDs from the instance segmentation mask     
         uniqueIDs = np.unique(img_instance)
         ### Verify every object in the current frame
         for u_id in uniqueIDs:
@@ -117,68 +114,15 @@ def process(instances):
             if obj:
                 if not obj.name in chosen_classes:
                     continue
+                ### The Rotation matrix of the object which moves the object into the worl coordinate frame is obj.R
                 ### obj.R --> R(object -> world)
-                angle_dpt=-math.atan2(obj.R[1,0],obj.R[0,0])#-camera_angleZ
-                
-                print("Frame: %d, Cam: %f, dir_angle_1: %f"%(frame,math.degrees(camera_angleZ),math.degrees(angle_dpt-camera_angleZ)))
-                dx=math.cos(angle_dpt)
-                dy=math.sin(angle_dpt)
-                dir_vect = np.matmul(np.array([dx,dy,0]),np.linalg.inv(camera_R))
-                # pred_dp_angle = math.atan2(dir_vect[0],dir_vect[1])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[0],dir_vect[2])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[1],dir_vect[0])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[1],dir_vect[2])
-                # print(math.degrees(pred_dp_angle))
-                # pred_dp_angle = math.atan2(dir_vect[2],dir_vect[0])
-                # print(math.degrees(pred_dp_angle))
-                pred_dp_angle = math.atan2(dir_vect[2],dir_vect[1])-math.pi
-                print(math.degrees(pred_dp_angle))
-                angle_diff = abs(math.atan2(math.sin((angle_dpt-camera_angleZ) - pred_dp_angle),math.cos((angle_dpt-camera_angleZ) - pred_dp_angle)))
-                print(math.degrees(angle_diff))
-
-
-                ### R(object -> cam_0)=R(object -> world)*(Tr(cam_0 -> world))^(-1)
-                R_o2c = np.matmul(obj.R, np.linalg.inv(camera_R))
-                # R_o2c = np.matmul(camera_R, np.linalg.inv(obj.R))
-                # R_o2c = np.matmul(np.linalg.inv(obj.R),camera_R)
-                # R_o2c = np.matmul(np.linalg.inv(camera_R),obj.R)
-
-                # print("from rot matrix")
-                # beta=-math.atan2(-R_o2c[2,0],math.sqrt(R_o2c[0,0]**2+R_o2c[1,0]**2))
-                # print(math.degrees(beta))
-                # alpha=-math.atan2(R_o2c[2,1]/math.cos(beta),R_o2c[2,2]/math.cos(beta))
-                # print(math.degrees(alpha))
-                # gamma=-math.atan2(R_o2c[1,0]/math.cos(beta),R_o2c[0,0]/math.cos(beta))
-                # print(math.degrees(gamma))
-
-                mask_instance = np.zeros_like(img_instance,dtype=np.uint8)
-                mask_instance[img_instance==s_id*N+i_id] = 255
-                _, thresh = cv2.threshold(mask_instance, 127, 255, 0)
-                contours, _ = cv2.findContours(thresh, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-                min_area=0
-                if len(contours)>1:
-                    for c in contours:
-                        area = cv2.contourArea(c)
-                        if area>min_area:
-                            mask_instance = np.zeros_like(img_instance,dtype=np.uint8)
-                            cv2.drawContours(mask_instance, c, -1, color=255, thickness=cv2.FILLED)
-                            min_area=area
-                inner_points = list_points(mask_instance,None)
-                if len(inner_points)==0:
-                    continue
-                rect = cv2.minAreaRect(inner_points)
-                Cx,Cy,lambda1,lambda2,angle=rect[0][0],rect[0][1],rect[1][0],rect[1][1],rect[2]
-                angle=math.radians(angle)
-                if Cx is None:
-                    continue
-                corners = xywhr2xyxyxyxy(np.asarray([Cx,Cy,lambda1,lambda2,angle]))
-                a=min(lambda1,lambda2)/2
-                dx=Cx+a*math.cos(angle_dpt)
-                dy=Cy+a*math.sin(angle_dpt)
-                fl.write("0 %f %f %f %f %f %f %f %f %f %f\n"%(corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H))
+                angle_dpt=-math.atan2(obj.R[1,0],obj.R[0,0])-camera_angleZ    
+                vertices=obj.vertices
+                ### The 3D BB has 8 points described by vertices: obj.vertices, which are transformed using the obj.R and obj.T matrices
+                Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]]])
+                vertices = np.matmul(vertices,Tr_obj2world)
+                ### Save the vertices and the direction angle into a txt file. Every frame has a separate file, every object has a separate line
+                fl.write("0 %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"%(vertices[0,0],vertices[0,1],vertices[0,2],vertices[1,0],vertices[1,1],vertices[1,2],vertices[2,0],vertices[2,1],vertices[2,2],vertices[3,0],vertices[3,1],vertices[3,2],vertices[4,0],vertices[4,1],vertices[4,2],vertices[5,0],vertices[5,1],vertices[5,2],vertices[6,0],vertices[6,1],vertices[6,2],vertices[7,0],vertices[7,1],vertices[7,2],angle_dpt))
         fl.close()
 
 def main():     
