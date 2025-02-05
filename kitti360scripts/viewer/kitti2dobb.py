@@ -87,8 +87,8 @@ def xywhr2xyxyxyxy(rboxes):
 def process(instances):
     for instance_name in instances:
         frame = int(os.path.splitext(instance_name)[0])
-        # if frame%10:
-        #     continue
+        if frame%10:
+            continue
         camera_tr = camera.cam2world[frame]
         camera_R = camera_tr[:3, :3]
         ### From https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
