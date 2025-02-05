@@ -117,17 +117,10 @@ def process(instances):
             if obj:
                 if not obj.name in chosen_classes:
                     continue
-                ### The Rotation matrix of the object which moves the object into the worl coordinate frame is obj.R
-                ### obj.R --> R(object -> world)
-                Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
-                
-                objX0w=np.matmul(Tr_obj2world,np.array([0.0,0.0,0.0,1.0]))
-                objX1w=np.matmul(Tr_obj2world,np.array([1.0,0.0,0.0,1.0]))
-
-                objX0c=np.matmul(np.linalg.inv(camera_tr),objX0w)
-                objX1c=np.matmul(np.linalg.inv(camera_tr),objX1w)
-
-                angle_dpt = -math.atan2(objX1c[2]-objX0c[2],objX1c[0]-objX0c[0])  
+                ### Calculate the direction
+                objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0]))
+                objX1c=np.matmul(np.linalg.inv(camera_R),objX1w)
+                angle_dpt = -math.atan2(objX1c[2],objX1c[0]) 
                  
                 vertices=obj.vertices
                 ### The 3D BB has 8 points described by vertices: obj.vertices, which are in the world coordinate frame

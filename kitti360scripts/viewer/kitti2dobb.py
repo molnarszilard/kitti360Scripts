@@ -119,21 +119,37 @@ def process(instances):
             if obj:
                 if not obj.name in chosen_classes:
                     continue
+
+                objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0]))
+                objX1c=np.matmul(np.linalg.inv(camera_R),objX1w)
+                angle_dpt = -math.atan2(objX1c[2],objX1c[0])
+                # print(math.degrees(angle_dpt))
+
                 ### obj.R --> R(object -> world)
                 # angle_dpt=-math.atan2(obj.R[1,0],obj.R[0,0])#-camera_angleZ
 
-                Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
-                
-                objX0w=np.matmul(Tr_obj2world,np.array([0.0,0.0,0.0,1.0]))
-                objX1w=np.matmul(Tr_obj2world,np.array([1.0,0.0,0.0,1.0]))
-
-                objX0c=np.matmul(np.linalg.inv(camera_tr),objX0w)
-                objX1c=np.matmul(np.linalg.inv(camera_tr),objX1w)
-
-                angle_dpt = -math.atan2(objX1c[2]-objX0c[2],objX1c[0]-objX0c[0])
+                # Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
+                # objX0w=np.matmul(Tr_obj2world,np.array([0.0,0.0,0.0,1.0]))
+                # objX1w=np.matmul(Tr_obj2world,np.array([1.0,0.0,0.0,1.0]))
+                # objX0c=np.matmul(np.linalg.inv(camera_tr),objX0w)
+                # objX1c=np.matmul(np.linalg.inv(camera_tr),objX1w)
+                # angle_dpt = -math.atan2(objX1c[2]-objX0c[2],objX1c[0]-objX0c[0])
+                # print("\nAngle")
                 # print(math.degrees(angle_dpt))
                 # angle_diff = abs(math.atan2(math.sin((angle_dpt-camera_angleZ) - angle_dpt),math.cos((angle_dpt-camera_angleZ) - angle_dpt)))
-                # print(math.degrees(angle_diff))
+                # print(math.degrees(angle_diff))                
+
+                #### Wrong approach
+                # R_o2c = np.matmul(np.linalg.inv(camera_R),obj.R)
+                # print("from rot matrix")
+                # beta=-math.atan2(-R_o2c[2,0],math.sqrt(R_o2c[0,0]**2+R_o2c[1,0]**2))
+                # print(math.degrees(beta))
+                # alpha=-math.atan2(R_o2c[2,1]/math.cos(beta),R_o2c[2,2]/math.cos(beta))
+                # print(math.degrees(alpha))
+                # gamma=-math.atan2(R_o2c[1,0]/math.cos(beta),R_o2c[0,0]/math.cos(beta))
+                # print(math.degrees(gamma))
+                # beta=math.atan2(-R_o2c[2,0],math.sqrt(R_o2c[2,1]**2+R_o2c[2,2]**2))
+                # print(math.degrees(beta))
 
                 mask_instance = np.zeros_like(img_instance,dtype=np.uint8)
                 mask_instance[img_instance==s_id*N+i_id] = 255
