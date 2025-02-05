@@ -103,7 +103,10 @@ def process(instances):
         img_instance = cv2.imread(os.path.join(kitti_instances,instance_name), -1)
         ### Save the new annotation file
         new_label_path = os.path.join(base,new_labels,instance_name[:-3]+'txt')
-        fl = open(new_label_path, "w")   
+        fl = open(new_label_path, "w")
+        ### The first line represents the Rotation matrix (9 values) and then the translation (last 3 values) of the camera2world
+        fl.write("%f %f %f %f %f %f %f %f %f %f %f %f\n"%(camera_R[0,0],camera_R[0,1],camera_R[0,2],camera_R[1,0],camera_R[1,1],camera_R[1,2],camera_R[2,0],camera_R[2,1],camera_R[2,2],camera_tr[0,3],camera_tr[1,3],camera_tr[2,3]))
+        ### THe  
         ### get the unique IDs from the instance segmentation mask     
         uniqueIDs = np.unique(img_instance)
         ### Verify every object in the current frame
@@ -122,7 +125,7 @@ def process(instances):
                 Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]]])
                 vertices = np.matmul(vertices,Tr_obj2world)
                 ### Save the vertices and the direction angle into a txt file. Every frame has a separate file, every object has a separate line
-                fl.write("0 %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"%(vertices[0,0],vertices[0,1],vertices[0,2],vertices[1,0],vertices[1,1],vertices[1,2],vertices[2,0],vertices[2,1],vertices[2,2],vertices[3,0],vertices[3,1],vertices[3,2],vertices[4,0],vertices[4,1],vertices[4,2],vertices[5,0],vertices[5,1],vertices[5,2],vertices[6,0],vertices[6,1],vertices[6,2],vertices[7,0],vertices[7,1],vertices[7,2],angle_dpt))
+                fl.write("%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n"%(vertices[0,0],vertices[0,1],vertices[0,2],vertices[1,0],vertices[1,1],vertices[1,2],vertices[2,0],vertices[2,1],vertices[2,2],vertices[3,0],vertices[3,1],vertices[3,2],vertices[4,0],vertices[4,1],vertices[4,2],vertices[5,0],vertices[5,1],vertices[5,2],vertices[6,0],vertices[6,1],vertices[6,2],vertices[7,0],vertices[7,1],vertices[7,2],angle_dpt))
         fl.close()
 
 def main():     
