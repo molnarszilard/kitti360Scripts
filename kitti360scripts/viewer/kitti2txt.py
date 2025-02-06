@@ -94,19 +94,17 @@ def process(instances):
         ### camera_tr --> Tr(cam_0 -> world)
         camera_tr = camera.cam2world[frame]
         camera_R = camera_tr[:3, :3]
-        ### THe K matrix of the camera
+        ### The K matrix of the camera
         camera_K = camera.K
         camera_height = camera.height
         camera_width = camera.width
-        ### The camera rotation along the Z(up) axis in the worl coordinate system
-        camera_angleZ = -math.atan2(camera_R[1,0],camera_R[0,0])
+        ### The camera rotation along the Z(up) axis in the world coordinate system
         img_instance = cv2.imread(os.path.join(kitti_instances,instance_name), -1)
         ### Save the new annotation file
         new_label_path = os.path.join(base,new_labels,instance_name[:-3]+'txt')
         fl = open(new_label_path, "w")
         ### The first line represents the Rotation matrix (9 values) and then the translation (last 3 values) of the camera2world
         fl.write("%f %f %f %f %f %f %f %f %f %f %f %f\n"%(camera_R[0,0],camera_R[0,1],camera_R[0,2],camera_R[1,0],camera_R[1,1],camera_R[1,2],camera_R[2,0],camera_R[2,1],camera_R[2,2],camera_tr[0,3],camera_tr[1,3],camera_tr[2,3]))
-        ### THe  
         ### get the unique IDs from the instance segmentation mask     
         uniqueIDs = np.unique(img_instance)
         ### Verify every object in the current frame

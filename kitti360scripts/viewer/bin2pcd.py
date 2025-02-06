@@ -7,9 +7,9 @@ import open3d as o3d
 import struct
 
 kitti_root = '/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/'
-sequence = '2013_05_28_drive_0000_sync'
+sequence = '2013_05_28_drive_0010_sync'
 
-name = '0000001250.bin'
+name = '0000000120.bin'
 sensor_type = 'velodyne_points' # 'sick_points'
 kitti_bbox = os.path.join(kitti_root,'data_3d_raw/',sequence,sensor_type,'data',name)
 
