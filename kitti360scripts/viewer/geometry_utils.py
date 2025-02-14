@@ -206,3 +206,14 @@ def matrix_to_Euler_angles(M, order='XYZ'):
     """ Convert a rotation matrix to Euler angles. Angles are returned in the order of application.
     """
     return quaternion_to_Euler_angles(matrix_to_quaternion(M),order=order)
+
+def decompose_camera_rotation(camR, pitch_offset=0,order='ZYX'):
+    """ decompose rotation matrix into yaw, pitch, roll (units of degrees)
+    """
+    R = np.dot(np.diag((1,1,1)), camR)
+    euler_angles = matrix_to_Euler_angles(R, order=order)
+    yaw = np.rad2deg(euler_angles[0])
+    pitch = np.rad2deg(euler_angles[1]) + pitch_offset
+    roll = np.rad2deg(euler_angles[2])
+
+    return yaw, pitch, roll

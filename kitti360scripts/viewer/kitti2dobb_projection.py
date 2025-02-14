@@ -199,24 +199,31 @@ def plot_rotated_axes(ax, r, name=None, offset=(0, 0, 0), scale=1):
     ax.text(*offset, name, color="k", va="center", ha="center",
             bbox={"fc": "w", "alpha": 0.8, "boxstyle": "circle"})
 
-def decompose_camera_rotation(camR, pitch_offset=0,order='ZYX'):
-    """ decompose rotation matrix into yaw, pitch, roll (units of degrees)
+def rotation_matrix_from_vectors(vec1, vec2):
+    """ Find the rotation matrix that aligns vec1 to vec2
+    :param vec1: A 3d "source" vector
+    :param vec2: A 3d "destination" vector
+    :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
     """
-    R = np.dot(np.diag((1,1,1)), camR)
-    euler_angles = geometry_utils.matrix_to_Euler_angles(R, order=order)
-    yaw = np.rad2deg(euler_angles[0])
-    pitch = np.rad2deg(euler_angles[1]) + pitch_offset
-    roll = np.rad2deg(euler_angles[2])
+    a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
+    v = np.cross(a, b)
+    if any(v): #if not all zeros then 
+        c = np.dot(a, b)
+        s = np.linalg.norm(v)
+        kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        return np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
 
-    return yaw, pitch, roll
+    else:
+        return np.eye(3) #cross of all zeros only occurs on identical directions
+
 
 def process(filenames):
     for filename in filenames:
         frame = int(os.path.splitext(filename)[0])
         if frame%10:
             continue
-        # if frame!=1250:
-        #     continue
+        if frame!=1250:
+            continue
 
         print("Frame: %d"%(frame))
         ### camera_tr --> Tr(cam_0 -> world)
@@ -225,7 +232,8 @@ def process(filenames):
         camera_K = camera.K
         camera_height = camera.height
         camera_width = camera.width
-        current_imu_pose = poses[np.where(ts == frame)[0][0]]        
+        current_imu_pose = poses[np.where(ts == frame)[0][0]] 
+
         
         if not os.path.exists(os.path.join(kitti_image,filename[:-3]+'png')):
             exit()
@@ -257,42 +265,82 @@ def process(filenames):
                 if obj:
                     if not obj.name in chosen_classes:
                         continue
-                    camRz,camRy,camRx = decompose_camera_rotation(camera_R,order='ZYX')
+                    # imu2worldR = current_imu_pose[:3,:3]
+                    # imuRzi,imuRyi,imuRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(imu2worldR),order='ZYX')
+                    # rotYwimu = np.asarray(Rotation.from_euler('Y', imuRyi, degrees=True).as_matrix())
+                    # rotXwimu = np.asarray(Rotation.from_euler('X', imuRxi, degrees=True).as_matrix())
+                    # rotYwimu180 = np.asarray(Rotation.from_euler('Y', 180, degrees=True).as_matrix())
+                    # rotIMU2 = np.matmul(rotYwimu180,np.matmul(rotYwimu,rotXwimu))
+                    # unitCY=np.array([0.0,0.0,1.0])
+                    # gravityW=np.array([0.0,0.0,-1.0])
+                    # unitCYinW = np.matmul(imu2worldR,unitCY)
+                    # unitCYinW_norm = np.matmul(rotIMU2,unitCYinW)
+                    # ang_diff = angle_between(gravityW,unitCYinW_norm)
+                    # print(gravityW,unitCYinW_norm,math.degrees(ang_diff))
                     
+                    rotX90 = np.asarray(Rotation.from_euler('X', 90, degrees=True).as_matrix())
+                    # rotZ90 = np.asarray(Rotation.from_euler('Z', 90, degrees=True).as_matrix())
+                    unitCY=np.array([0.0,0.0,1.0])
+                    ref=np.array([1.0,0.0,0.0])
+                    cam2world2 = np.matmul(camera_R,rotX90)
+                    camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(cam2world2),order='ZYX')
+                    rotYwimu = np.asarray(Rotation.from_euler('Y', camRyi, degrees=True).as_matrix())
+                    rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
+                    rotIMU = np.matmul(rotYwimu,rotXwimu)
+                    cam2world_norm = np.matmul(rotIMU,cam2world2)
+                    gravityC=np.array([0.0,0.0,-1.0])
+                    gravityW=np.array([0.0,0.0,-1.0])
+                    unitCGinW = np.matmul(cam2world2,gravityC)
+                    ang_diff = angle_between(gravityW,unitCGinW)
+                    print(gravityW,unitCGinW,math.degrees(ang_diff))
+                    unitCGinW_norm = np.matmul(rotIMU,unitCGinW)
+                    ang_diff = angle_between(gravityW,unitCGinW_norm)
+                    print(gravityW,unitCGinW_norm,math.degrees(ang_diff))
 
-                    objX0w=np.matmul(obj.R,np.array([0.0,0.0,0.0]))
-                    objX0c=np.matmul(np.linalg.inv(camera_R),objX0w)
-                    objX0velo=np.matmul(cam2velo,np.concatenate((objX0c,np.array([1.0]))))[:3]
                     objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0]))
-                    objX1c=np.matmul(np.linalg.inv(camera_R),objX1w)
-                    objX1velo=np.matmul(cam2velo,np.concatenate((objX1c,np.array([1.0]))))[:3]
-                    objX10w=np.matmul(obj.R,np.array([10.0,0.0,0.0]))                    
-                    objX10c=np.matmul(np.linalg.inv(camera_R),objX10w)
-                    objX10velo=np.matmul(cam2velo,np.concatenate((objX10c,np.array([1.0]))))[:3]
-                    angle_dpt = math.atan2(-objX1c[2],objX1c[0]) #alpha
-                    rotY_alpha = np.asarray(Rotation.from_euler('Y', angle_dpt, degrees=False).as_matrix())
-                    step=np.matmul(rotY_alpha,np.array([1.0,0.0,0.0])) 
+                    objX1c=np.matmul(np.linalg.inv(cam2world_norm),objX1w)
+
+                    # r0 = Rotation.identity()
+                    # ax = plt.figure().add_subplot(projection="3d", proj_type="ortho")
+                    # plot_rotated_axes(ax, r0, name="W", offset=(0, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(camera_R), name="c", offset=(2, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(cam2world2), name="c", offset=(4, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU,cam2world2)), name="ry", offset=(6, 0, 0))
+                    # ax.plot([2.0,2.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+                    # # ax.plot([0.0,objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ffa400")
+                    # loc = np.array([(6, 0, 0), (6, 0, 0)])
+                    # # ax.plot([6.0,6.0], [0.0,0.0], [0.0,-1.0], "#a400ff")
+                    # ax.set(xlim=(-1.25, 7.25), ylim=(-1.25, 1.25), zlim=(-1.25, 1.25))
+                    # ax.set(xticks=range(-1, 8), yticks=[-1, 0, 1], zticks=[-1, 0, 1])
+                    # ax.set_aspect("equal", adjustable="box")
+                    # ax.figure.set_size_inches(6, 5)
+                    # plt.tight_layout()
+                    # plt.show()    
+
+                    angle_dpt = math.atan2(objX1c[1],objX1c[0]) #alpha
+                    rotZ_alpha = np.asarray(Rotation.from_euler('Z', angle_dpt, degrees=False).as_matrix())
+                    step=np.matmul(rotZ_alpha,np.array([1.0,0.0,0.0])) 
                     ang_diff = angle_between(objX1c,step)
                     # print(objX1c,step,math.degrees(ang_diff))
 
-                    camX10w=np.matmul(camera_R,np.array([0.0,0.0,0.0]))
-                    camX0velo=np.matmul(cam2velo,np.concatenate((np.array([0.0,0.0,0.0]),np.array([1.0]))))[:3]
-                    camX1w=np.matmul(camera_R,np.array([1.0,0.0,0.0]))
-                    camX1velo=np.matmul(cam2velo,np.concatenate((np.array([1.0,0.0,0.0]),np.array([1.0]))))[:3]
-                    camX10w=np.matmul(camera_R,np.array([10.0,0.0,0.0]))
-                    camX10velo=np.matmul(cam2velo,np.concatenate((np.array([10.0,0.0,0.0]),np.array([1.0]))))[:3]
+                    # camX10w=np.matmul(camera_R,np.array([0.0,0.0,0.0]))
+                    # camX0velo=np.matmul(cam2velo,np.concatenate((np.array([0.0,0.0,0.0]),np.array([1.0]))))[:3]
+                    # camX1w=np.matmul(camera_R,np.array([1.0,0.0,0.0]))
+                    # camX1velo=np.matmul(cam2velo,np.concatenate((np.array([1.0,0.0,0.0]),np.array([1.0]))))[:3]
+                    # camX10w=np.matmul(camera_R,np.array([10.0,0.0,0.0]))
+                    # camX10velo=np.matmul(cam2velo,np.concatenate((np.array([10.0,0.0,0.0]),np.array([1.0]))))[:3]
                     
-                    WX0inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([0.0,0.0,0.0])))
-                    WX1inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([1.0,0.0,0.0])))
-                    WX10inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([10.0,0.0,0.0])))
+                    # WX0inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([0.0,0.0,0.0])))
+                    # WX1inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([1.0,0.0,0.0])))
+                    # WX10inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([10.0,0.0,0.0])))
                     
-                    beta = math.radians(camRz)
+                    # beta = math.radians(camRzi)
                     # beta=math.atan2(camX1w[1],camX1w[0])
-                    angle_dpt_in_world = math.atan2(objX1w[1],objX1w[0]) #theta
+                    # angle_dpt_in_world = math.atan2(objX1w[1],objX1w[0]) #theta
                     # camera_angleZ = -math.atan2(camera_R[1,0],camera_R[0,0]) #beta
                     # print(math.degrees(beta),math.degrees(angle_dpt_in_world),math.degrees(angle_dpt),math.degrees(angle_dpt_in_world-beta+angle_dpt))
                     
-                    # camRz,camRy,camRx = decompose_camera_rotation(camera_R,order='ZYX')
+                    # camRz,camRy,camRx = geometry_utils.decompose_camera_rotation(camera_R,order='ZYX')
                     # print(camRz,camRy,camRx)
                     # rot = np.asarray(Rotation.from_euler('ZYX', [camRz,camRy,camRx], degrees=True).as_matrix())
                     # print(camera_R)
@@ -300,49 +348,17 @@ def process(filenames):
                     # print(rot)
                     # print("")
                     # print(np.matmul(rot,np.linalg.inv(camera_R)))
-
-                    rotY_alpha = np.asarray(Rotation.from_euler('Y', angle_dpt, degrees=False).as_matrix())
-                    rotZ = np.asarray(Rotation.from_euler('Z', camRz, degrees=True).as_matrix())
-                    rotY = np.asarray(Rotation.from_euler('Y', camRy, degrees=True).as_matrix())
-                    rotYz = np.asarray(Rotation.from_euler('Y', -camRz, degrees=True).as_matrix())
-                    rotX = np.asarray(Rotation.from_euler('X', camRx, degrees=True).as_matrix())
-                    rotX90 = np.asarray(Rotation.from_euler('X', -90, degrees=True).as_matrix())
-                    rot2=np.matmul(rotZ,np.matmul(rotY,rotX))
                     unitCX=np.array([1.0,0.0,0.0])
                     
                     # unitCX=np.matmul(np.matmul(camera_R,rotY_alpha),unitCX)
-                    objXctow=np.matmul(np.matmul(np.matmul(np.matmul(rotY,rotX90),rotYz),rotY_alpha),unitCX)                    
+                    objXctow=np.matmul(cam2world_norm,np.matmul(rotZ_alpha,unitCX))
                     # objXctow=np.matmul(np.matmul(np.matmul(rotYz,np.matmul(rotY,rotX90)),rotY_alpha),unitCX)
                     ang_diff = angle_between(objX1w,objXctow)
+                    print(objX1w,objXctow,math.degrees(ang_diff))
                     if math.degrees(ang_diff)>1:
                         print(objX1w,objXctow,math.degrees(ang_diff))
                         dummy=False
-                    unitCY=np.array([0.0,1.0,0.0])
-                    gravityW=np.array([0.0,0.0,-1.0])
-                    unitCYw_norm = np.matmul(np.matmul(np.matmul(rotY,rotX90),rotYz),unitCY)
-                    ang_diff_Gw_CYw = angle_between(gravityW,unitCYw_norm)
-                    if math.degrees(ang_diff_Gw_CYw)>1:
-                        print(objX1w,objXctow,math.degrees(ang_diff_Gw_CYw))
-                        dummy=False
-
-                    # r0 = Rotation.identity()
-                    # ax = plt.figure().add_subplot(projection="3d", proj_type="ortho")
-                    # plot_rotated_axes(ax, r0, name="W", offset=(0, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(camera_R), name="c", offset=(2, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotY,rotX90)), name="ry", offset=(4, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(np.matmul(rotY,rotX90),rotYz)), name="rxy", offset=(6, 0, 0))
-                    # # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(camera_R,rotY_alpha)), name="al", offset=(6, 0, 0))
-                    # ax.plot([0.0,objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
-                    # ax.plot([0.0,objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ffa400")
-                    # loc = np.array([(6, 0, 0), (6, 0, 0)])
-                    # ax.plot([6.0,6.0], [0.0,0.0], [0.0,-1.0], "#a400ff")
-                    # ax.set(xlim=(-1.25, 7.25), ylim=(-1.25, 1.25), zlim=(-1.25, 1.25))
-                    # ax.set(xticks=range(-1, 8), yticks=[-1, 0, 1], zticks=[-1, 0, 1])
-                    # ax.set_aspect("equal", adjustable="box")
-                    # ax.figure.set_size_inches(6, 5)
-                    # plt.tight_layout()
-                    # plt.show()                   
-                    
+                  
                     row.append(math.degrees(angle_dpt))
                     new_csv.append(row)
 
