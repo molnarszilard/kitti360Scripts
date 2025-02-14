@@ -22,7 +22,7 @@ np.set_printoptions(suppress=True, precision=6)
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--kitti_root',default='/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/',
                     help='the root of the kitti folder of original data')
-parser.add_argument('--sequence', default='2013_05_28_drive_0000_sync',
+parser.add_argument('--sequence', default='2013_05_28_drive_0010_sync',
                     help='the sequence')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
@@ -46,7 +46,7 @@ new_images='images/'
 new_plots='plots'
 new_labels='labels/'
 csv_labels_folder=os.path.join(args.cameraID,'ellipse_data/')
-new_csv_labels_folder=os.path.join(args.cameraID,'ellipse_dir_data/')
+new_csv_labels_folder=os.path.join(args.cameraID,'ellipse_dir_data_gt/')
 if not os.path.exists(os.path.join(base,new_labels)):
     os.makedirs(os.path.join(base,new_labels))
 if not os.path.exists(os.path.join(base,new_images)):
@@ -222,8 +222,8 @@ def process(filenames):
         frame = int(os.path.splitext(filename)[0])
         if frame%10:
             continue
-        if frame!=1250:
-            continue
+        # if frame!=1250:
+        #     continue
 
         print("Frame: %d"%(frame))
         ### camera_tr --> Tr(cam_0 -> world)
@@ -255,7 +255,17 @@ def process(filenames):
                 
                 counter+=1
                 if counter==0:
-                    row.append('directionAngle')
+                    row.append('directionX')
+                    row.append('directionY')
+                    row.append('Rc2w-11')
+                    row.append('Rc2w-12')
+                    row.append('Rc2w-13')
+                    row.append('Rc2w-21')
+                    row.append('Rc2w-22')
+                    row.append('Rc2w-23')
+                    row.append('Rc2w-31')
+                    row.append('Rc2w-32')
+                    row.append('Rc2w-33')
                     new_csv.append(row)
                     continue
                 
@@ -288,40 +298,68 @@ def process(filenames):
                     rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
                     rotIMU = np.matmul(rotYwimu,rotXwimu)
                     cam2world_norm = np.matmul(rotIMU,cam2world2)
-                    gravityC=np.array([0.0,0.0,-1.0])
-                    gravityW=np.array([0.0,0.0,-1.0])
-                    unitCGinW = np.matmul(cam2world2,gravityC)
-                    ang_diff = angle_between(gravityW,unitCGinW)
-                    print(gravityW,unitCGinW,math.degrees(ang_diff))
-                    unitCGinW_norm = np.matmul(rotIMU,unitCGinW)
-                    ang_diff = angle_between(gravityW,unitCGinW_norm)
-                    print(gravityW,unitCGinW_norm,math.degrees(ang_diff))
+                    Rc2w_1D = np.reshape(cam2world_norm,9)
+                    # gravityC=np.array([0.0,0.0,-1.0])
+                    # gravityW=np.array([0.0,0.0,-1.0])
+                    # unitCGinW = np.matmul(cam2world2,gravityC)
+                    # ang_diff = angle_between(gravityW,unitCGinW)
+                    # print(gravityW,unitCGinW,math.degrees(ang_diff))
+                    # unitCGinW_norm = np.matmul(rotIMU,unitCGinW)
+                    # ang_diff = angle_between(gravityW,unitCGinW_norm)
+                    # print(gravityW,unitCGinW_norm,math.degrees(ang_diff))
 
                     objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0]))
                     objX1c=np.matmul(np.linalg.inv(cam2world_norm),objX1w)
+                    objX1c = unit_vector(objX1c)
+                    angle_dpt = math.atan2(objX1c[1],objX1c[0]) #alpha
+                    dir_pointC = objX1c[:2]
+                    rotZ_alpha = np.asarray(Rotation.from_euler('Z', angle_dpt, degrees=False).as_matrix())
+                    # unitCx=np.matmul(rotZ_alpha,np.array([1.0,0.0,0.0])) 
+                    # ang_diff = angle_between(objX1c,unitCx)
+                    # print(objX1c,step,math.degrees(ang_diff))
+
+                    # unitCX=np.array([1.0,0.0,0.0])
+                    # objXcnew=np.matmul(rotZ_alpha,unitCX)
+                    # objX1c[2]=0
+                    # ang_diff = angle_between(objX1c,objXcnew)
+                    # print(objX1c,objXcnew,math.degrees(ang_diff))
+                    # objXctow=np.matmul(cam2world_norm,np.matmul(rotZ_alpha,unitCX))
+                    # # objXctow=np.matmul(np.matmul(np.matmul(rotYz,np.matmul(rotY,rotX90)),rotY_alpha),unitCX)
+                    # ang_diff = angle_between(objX1w,objXctow)
+                    # print(objX1w,objXctow,math.degrees(ang_diff))
+                    # if math.degrees(ang_diff)>1:
+                    #     print(objX1w,objXctow,math.degrees(ang_diff))
+                    #     dummy=False
 
                     # r0 = Rotation.identity()
                     # ax = plt.figure().add_subplot(projection="3d", proj_type="ortho")
                     # plot_rotated_axes(ax, r0, name="W", offset=(0, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(camera_R), name="c", offset=(2, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(cam2world2), name="c", offset=(4, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU,cam2world2)), name="ry", offset=(6, 0, 0))
-                    # ax.plot([2.0,2.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU,cam2world2)), name="", offset=(0, 0, 0))
+
+                    # # plot_rotated_axes(ax, Rotation.from_matrix(camera_R), name="c_o", offset=(2, 0, 0))
+                    # # plot_rotated_axes(ax, Rotation.from_matrix(cam2world2), name="cz", offset=(4, 0, 0))
+                    # # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU,cam2world2)), name="c", offset=(6, 0, 0))
+
+                    # ### Plotting the original direction angle into the world on each coordinate system
+                    # ax.plot([0.0,0.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+                    # # ax.plot([2.0,2.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+                    # # ax.plot([4.0,4.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+                    # # ax.plot([6.0,6.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+                    # # ax.plot([8.0,8.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
+
+                    # # ax.plot([0.0,0.0+objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ff8900")
+                    # # ax.plot([2.0,2.0+objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ff8900")
+                    # # ax.plot([4.0,4.0+objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ff8900")
+                    # # ax.plot([6.0,6.0+objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ff8900")
                     # # ax.plot([0.0,objXctow[0]/np.max(abs(objXctow))], [0.0,objXctow[1]/np.max(abs(objXctow))], [0.0,objXctow[2]/np.max(abs(objXctow))], "#ffa400")
                     # loc = np.array([(6, 0, 0), (6, 0, 0)])
                     # # ax.plot([6.0,6.0], [0.0,0.0], [0.0,-1.0], "#a400ff")
-                    # ax.set(xlim=(-1.25, 7.25), ylim=(-1.25, 1.25), zlim=(-1.25, 1.25))
-                    # ax.set(xticks=range(-1, 8), yticks=[-1, 0, 1], zticks=[-1, 0, 1])
+                    # ax.set(xlim=(-1.25, 1.25), ylim=(-1.25, 1.25), zlim=(-1.25, 1.25))
+                    # ax.set(xticks=range(-1, 2), yticks=[-1, 0, 1], zticks=[-1, 0, 1])
                     # ax.set_aspect("equal", adjustable="box")
                     # ax.figure.set_size_inches(6, 5)
                     # plt.tight_layout()
-                    # plt.show()    
-
-                    angle_dpt = math.atan2(objX1c[1],objX1c[0]) #alpha
-                    rotZ_alpha = np.asarray(Rotation.from_euler('Z', angle_dpt, degrees=False).as_matrix())
-                    step=np.matmul(rotZ_alpha,np.array([1.0,0.0,0.0])) 
-                    ang_diff = angle_between(objX1c,step)
-                    # print(objX1c,step,math.degrees(ang_diff))
+                    # plt.show()   
 
                     # camX10w=np.matmul(camera_R,np.array([0.0,0.0,0.0]))
                     # camX0velo=np.matmul(cam2velo,np.concatenate((np.array([0.0,0.0,0.0]),np.array([1.0]))))[:3]
@@ -348,18 +386,14 @@ def process(filenames):
                     # print(rot)
                     # print("")
                     # print(np.matmul(rot,np.linalg.inv(camera_R)))
-                    unitCX=np.array([1.0,0.0,0.0])
                     
-                    # unitCX=np.matmul(np.matmul(camera_R,rotY_alpha),unitCX)
-                    objXctow=np.matmul(cam2world_norm,np.matmul(rotZ_alpha,unitCX))
-                    # objXctow=np.matmul(np.matmul(np.matmul(rotYz,np.matmul(rotY,rotX90)),rotY_alpha),unitCX)
-                    ang_diff = angle_between(objX1w,objXctow)
-                    print(objX1w,objXctow,math.degrees(ang_diff))
-                    if math.degrees(ang_diff)>1:
-                        print(objX1w,objXctow,math.degrees(ang_diff))
-                        dummy=False
                   
-                    row.append(math.degrees(angle_dpt))
+                    # row.append(math.degrees(angle_dpt))
+                    for elem in dir_pointC:
+                        row.append(elem)
+                    for elem in Rc2w_1D:
+                        row.append(elem)
+                    # row.append(Rc2w_1D)
                     new_csv.append(row)
 
                     R = np.array([[row[5],row[6]],[row[7],row[8]]]).astype(np.float64)
@@ -374,8 +408,8 @@ def process(filenames):
                     # print(math.degrees(angle_dpt))
                     corners = xywhr2xyxyxyxy(np.array([cx,cy,w,h,angle_obb]))
                     a=min(w,h)/2
-                    dx=cx+a*math.cos(angle_dpt)
-                    dy=cy+a*math.sin(angle_dpt)
+                    dx=cx+a*math.cos(-angle_dpt)
+                    dy=cy+a*math.sin(-angle_dpt)
                     fl.write("0 %f %f %f %f %f %f %f %f %f %f\n"%(corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H))
                     img_rgb = cv2.ellipse(img_rgb, (int(cx),int(cy)), (int(w/2),int(h/2)), math.degrees(angle_obb), 0, 360, get_color('red'), 2)
                     # Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
