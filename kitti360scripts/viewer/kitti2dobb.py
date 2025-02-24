@@ -15,22 +15,22 @@ np.set_printoptions(suppress=True, precision=6)
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--kitti_root',default='/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/',
                     help='the root of the kitti folder of original data')
-parser.add_argument('--sequence', default='2013_05_28_drive_0000_sync',
+parser.add_argument('--sequence', default='2013_05_28_drive_0010_sync',
                     help='the sequence')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
 parser.add_argument('--multiprocess', default=1,type=int,
                     help='number of parallell processes')
-parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_temp10/',
+parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_temp/',
                     help='the root folder of the results')
 args = parser.parse_args()
 
 N = 1000
 all_classes = ['building','pole','traffic light','traffic sign','person','rider','car','truck','bus','caravan','trailer','train','motorcycle','bicycle','garage','stop','smallpole','lamp','trash bin','vending machine']
 # chosen_classes = ['car','rider','truck','bus','caravan','trailer','train','motorcycle','bicycle']
-chosen_classes = ['car','truck','bus','caravan','trailer','train']
+# chosen_classes = ['car','truck','bus','caravan','trailer','train']
 # chosen_classes = ['car']
-# chosen_classes = all_classes
+chosen_classes = all_classes
 
 kitti_image = os.path.join(args.kitti_root,'data_2d_raw',args.sequence,args.cameraID,'data_rect')
 kitti_instances = os.path.join(args.kitti_root,'data_2d_semantics/train',args.sequence,args.cameraID,'instance')
@@ -57,10 +57,78 @@ camera = Camera(root_dir=args.kitti_root, seq=args.sequence)
 base=os.path.join(args.result_folder,args.sequence)
 new_images='images/'
 new_labels='labels/'
+new_plots='plots'
 if not os.path.exists(os.path.join(base,new_labels)):
     os.makedirs(os.path.join(base,new_labels))
 if not os.path.exists(os.path.join(base,new_images)):
     os.makedirs(os.path.join(base,new_images))
+if not os.path.exists(os.path.join(base,new_plots)):
+    os.makedirs(os.path.join(base,new_plots))
+
+def get_color(cls,max=10):
+    if isinstance(cls,int):
+        if cls%max==0: #plane
+            return (0,128,255) #orange
+        elif cls%max==1: #ship
+            return (255,0,255) #fuchsia
+        elif cls%max==2: # large vehicle
+            return (255,0,0) #blue
+        elif cls%max==3: # small vehicle
+            return (255,255,0) #cyan
+        elif cls%max==4: # helicopter
+            return (255,0,128) #purple
+        elif cls%max==5: # 
+            return (255,153,255) # pink
+        elif cls%max==6: 
+            return (0,255,255) #yellow
+        elif cls%max==7: 
+            return (128,0,255) #magenta
+        elif cls%max==8: 
+            return (255,255,255) #white
+        elif cls%max==9: 
+            return (128,255,0) #teal
+        elif cls%max==10:
+            return (0,0,0) #black
+        elif cls%max==11:
+            return (0,255,0) #green
+        elif cls%max==12:
+            return (0,0,255) #red
+        else:
+            # print("Try another class.")
+            return (0,0,0) #black
+    else:
+        if cls=='orange': #plane
+            return (0,128,255) #orange
+        elif cls=='fuchsia': #ship
+            return (255,0,255) #fuchsia
+        elif cls=='blue': # large vehicle
+            return (255,0,0) #blue
+        elif cls=='cyan': # small vehicle
+            return (255,255,0) #cyan
+        elif cls=='purple': # helicopter
+            return (255,0,128) #purple
+        elif cls=='pink':
+            return (255,153,255) #pink
+        elif cls=='yellow': # special 2
+            return (0,255,255) #yellow
+        elif cls=='magenta':
+            return (128,0,255) #magenta
+        elif cls=='white': # special 4
+            return (255,255,255) #white
+        elif cls=='teal': # container crane
+            return (128,255,0) #teal
+        elif cls=='black':
+            return (0,0,0) #black
+        elif cls=='green': # special 3
+            return (0,255,0) #green        
+        elif cls=='red': # special 1
+            return (0,0,255) #red
+        
+        elif cls=='yolored':
+            return (59,57,253) #yolo detection red        
+        else:
+            print("Try another class.")
+            return (0,0,0) #black
 
 def list_points(matrix,value):
     lines_points = []
@@ -107,6 +175,7 @@ def process(instances):
             img_rgb = cv2.imread(os.path.join(kitti_image,instance_name))
         new_label_path = os.path.join(base,new_labels,instance_name[:-3]+'txt')
         new_image_path = os.path.join(base,new_images,instance_name)
+        new_plot_path = os.path.join(base,new_plots,instance_name)
         cv2.imwrite(new_image_path,img_rgb)
         fl = open(new_label_path, "w")
         
@@ -172,11 +241,14 @@ def process(instances):
                 if Cx is None:
                     continue
                 corners = xywhr2xyxyxyxy(np.asarray([Cx,Cy,lambda1,lambda2,angle]))
-                a=min(lambda1,lambda2)/2
+                a=max(min(lambda1,lambda2)/2,20)
                 dx=Cx+a*math.cos(angle_dpt)
                 dy=Cy+a*math.sin(angle_dpt)
+                img_rgb = cv2.ellipse(img_rgb, (int(Cx),int(Cy)), (int(lambda1/2),int(lambda2/2)), math.degrees(angle), 0, 360, get_color(chosen_classes.index(obj.name)), 2)
+                img_rgb = cv2.arrowedLine(img_rgb, (int(Cx),int(Cy)), (int(dx),int(dy)), get_color(chosen_classes.index(obj.name)), 2)
                 fl.write("0 %f %f %f %f %f %f %f %f %f %f\n"%(corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H))
         fl.close()
+        cv2.imwrite(new_plot_path,img_rgb)
 
 def main():     
     if args.multiprocess==1:
