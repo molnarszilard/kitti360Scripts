@@ -27,7 +27,7 @@ parser.add_argument('--labels',default='labels_pred289/',
                     help='the labels folder')
 parser.add_argument('--kitti_root',default='/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/',
                     help='the root of the kitti folder of original data')
-parser.add_argument('--sequence', default='2013_05_28_drive_0010_sync',
+parser.add_argument('--sequence', default='2013_05_28_drive_0009_sync',
                     help='the sequence')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
@@ -246,6 +246,11 @@ def process():
     total_angle_diffs_rot = []
     total_angle_diffs_world = []
     total_angle_diffs_conversion = []
+    min_errors = []
+    row=[]
+    row.append("ImageName")
+    row.append("angle_error")
+    min_errors.append(row)
     for filename in csv_labels:
         frame_matched_cl0=False
         frame_matched_cl1=False
@@ -372,6 +377,7 @@ def process():
         
         objects_classs0_this_frame = 0
         objects_classs1_this_frame = 0
+        image_rot_error = 360
         for i in range(len(matches)):
             cx,cy,w,h,angle_obb,dpt_pointCx_gt,dpt_pointCy_gt = ellipse_csv[matches[i,0]][1:]
             cxp,cyp,wp,hp,angle_obbp,dpt_angle = label_array[matches[i,1]][1:]
@@ -438,6 +444,8 @@ def process():
 
             ang_diff_camera = math.degrees(angle_between(dirVectC_pred,dirVectC_gt))
             ang_diff_world = math.degrees(angle_between(dirVectW_pred,dirVectW_gt))
+            if image_rot_error>ang_diff_world:
+                image_rot_error=ang_diff_world
 
             total_angle_diffs_rot.append(math.degrees(angle_between(unit_c2w_pred,unit_c2w_gt)))
             total_angle_diffs_camera.append(ang_diff_camera)
@@ -479,6 +487,10 @@ def process():
             frames_classall.write("%d\n"%(frame))
         if frame_matched_cl1 and frame_matched_cl0:
             frames_classboth.write("%d\n"%(frame))
+            row=[]
+            row.append(f'{frame:010d}.png')
+            row.append(image_rot_error)
+            min_errors.append(row)
             if frame_matched_cl0:
                 objects_class0+=objects_classs0_this_frame
             if frame_matched_cl1:
@@ -494,6 +506,10 @@ def process():
 
     df = pd.DataFrame(total_angle_diffs_rot)
     df.to_csv(os.path.join(base, "angle_diff_rotations.csv"),header=False, index=False)
+
+    df = pd.DataFrame(np.asarray(min_errors))
+    df.to_csv(os.path.join(base,'minimum_errors.csv',),header=False, index=False, sep=';', quotechar='|')
+
     frames_class0.close()
     frames_class1.close()
     frames_classall.close()
