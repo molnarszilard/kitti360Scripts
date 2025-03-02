@@ -26,10 +26,17 @@ parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_temp/
 args = parser.parse_args()
 
 N = 1000
+### https://github.com/autonomousvision/kitti360Scripts/blob/master/kitti360scripts/helpers/labels.py
 all_classes = ['building','pole','traffic light','traffic sign','person','rider','car','truck','bus','caravan','trailer','train','motorcycle','bicycle','garage','stop','smallpole','lamp','trash bin','vending machine']
+all_classes_sID=[11,17,19,20,24,25,26,27,28,29,30,31,32,33,34,36,37,38,39,40]
 # chosen_classes = ['car','rider','truck','bus','caravan','trailer','train','motorcycle','bicycle']
+chosen_classes_sID=[26,25,27,28,29,30,31,32,33]
 # chosen_classes = ['car','truck','bus','caravan','trailer','train']
+chosen_classes_sID=[26,27,28,29,30,31]
 # chosen_classes = ['car']
+chosen_classes_sID=[26]
+# chosen_classes = ['car','truck','bus','caravan','trailer','train','building']
+chosen_classes_sID=[26,27,28,29,30,31,11]
 chosen_classes = all_classes
 
 kitti_image = os.path.join(args.kitti_root,'data_2d_raw',args.sequence,args.cameraID,'data_rect')

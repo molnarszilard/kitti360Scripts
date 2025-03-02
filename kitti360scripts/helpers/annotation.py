@@ -354,7 +354,7 @@ class Annotation2DInstance:
 # Meta class for KITTI360Bbox3D
 class Annotation3D:
     # Constructor
-    def __init__(self, labelDir='', sequence=''):
+    def __init__(self, labelDir='', sequence='', list_objects = True):
 
         labelPath = glob.glob(os.path.join(labelDir, '*', '%s.xml' % sequence)) # train or test
         if len(labelPath)!=1:
@@ -363,9 +363,9 @@ class Annotation3D:
             labelPath = labelPath[0]
             print('Loading %s...' % labelPath)
 
-        self.init_instance(labelPath)
+        self.init_instance(labelPath,list_objects=list_objects)
 
-    def init_instance(self, labelPath):
+    def init_instance(self, labelPath,list_objects=True):
         # load annotation
         tree = ET.parse(labelPath)
         root = tree.getroot()
@@ -385,9 +385,10 @@ class Annotation3D:
 
         globalIds = np.asarray(list(self.objects.keys()))
         semanticIds, instanceIds = global2local(globalIds)
-        for label in labels:
-            if label.hasInstances:
-                print(f'{label.name:<30}:\t {(semanticIds==label.id).sum()}')
+        if list_objects:
+            for label in labels:
+                if label.hasInstances:
+                    print(f'{label.name:<30}:\t {(semanticIds==label.id).sum()}')
         print(f'Loaded {len(globalIds)} instances')
         print(f'Loaded {self.num_bbox} boxes')
 
