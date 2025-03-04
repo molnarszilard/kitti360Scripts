@@ -45,6 +45,8 @@ sequences = ['2013_05_28_drive_0000_sync',
              '2013_05_28_drive_0009_sync',
              '2013_05_28_drive_0010_sync']
 
+# sequences = ['2013_05_28_drive_0000_sync']
+
 if not os.path.exists(args.result_folder):
     os.makedirs(args.result_folder)
 
@@ -172,7 +174,7 @@ def process():
             frame = int(os.path.splitext(filename)[0])
             if frame==0:
                 continue
-            print("Frame: %d"%(frame))
+            # print("Frame: %d"%(frame))
             valid_key_found = False
             valid_key = frame
             while not valid_key_found:

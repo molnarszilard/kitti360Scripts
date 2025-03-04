@@ -28,7 +28,7 @@ parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
 parser.add_argument('--multiprocess', default=1,type=int,
                     help='number of parallell processes')
-parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_pose3_veh/',
+parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_pose_veh/',
                     help='the root folder of the results')
 args = parser.parse_args()
 
@@ -223,8 +223,10 @@ def process(filenames):
         frame = int(os.path.splitext(filename)[0])
         # if frame%10:
         #     continue
-        # if frame!=1250:
+        # if frame!=2:
         #     continue
+        # if frame>2:
+        #     exit()
 
         print("Frame: %d"%(frame))
         ### camera_tr --> Tr(cam_0 -> world)
@@ -266,15 +268,19 @@ def process(filenames):
                 if counter==0:
                     row.append('directionX')
                     row.append('directionY')
-                    row.append('Rc2w-11')
-                    row.append('Rc2w-12')
-                    row.append('Rc2w-13')
-                    row.append('Rc2w-21')
-                    row.append('Rc2w-22')
-                    row.append('Rc2w-23')
-                    row.append('Rc2w-31')
-                    row.append('Rc2w-32')
-                    row.append('Rc2w-33')
+                    # row.append('Rc2w-11')
+                    # row.append('Rc2w-12')
+                    # row.append('Rc2w-13')
+                    # row.append('Rc2w-21')
+                    # row.append('Rc2w-22')
+                    # row.append('Rc2w-23')
+                    # row.append('Rc2w-31')
+                    # row.append('Rc2w-32')
+                    # row.append('Rc2w-33')
+                    row.append('rotZ')
+                    row.append('rotY')
+                    row.append('rotZ')
+
                     new_csv.append(row)
                     continue
                 
@@ -297,16 +303,39 @@ def process(filenames):
                     # ang_diff = angle_between(gravityW,unitCYinW_norm)
                     # print(gravityW,unitCYinW_norm,math.degrees(ang_diff))
                     
-                    rotX90 = np.asarray(Rotation.from_euler('X', 90, degrees=True).as_matrix())
+                    # rotX90 = np.asarray(Rotation.from_euler('X', 90, degrees=True).as_matrix())
                     # rotZ90 = np.asarray(Rotation.from_euler('Z', 90, degrees=True).as_matrix())
-                    unitCY=np.array([0.0,0.0,1.0])
-                    ref=np.array([1.0,0.0,0.0])
-                    cam2world2 = np.matmul(camera_R,rotX90)
-                    camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(cam2world2),order='ZYX')
+                    # unitCY=np.array([0.0,0.0,1.0])
+                    # ref=np.array([1.0,0.0,0.0])
+                    # cam2world2 = np.matmul(camera_R,rotX90)
+                    # camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(cam2world2),order='ZYX')
+                    # rotYwimu = np.asarray(Rotation.from_euler('Y', camRyi, degrees=True).as_matrix())
+                    # rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
+                    # rotIMU = np.matmul(rotYwimu,rotXwimu)
+                    # cam2world_norm = np.matmul(rotIMU,cam2world2)
+
+
+
+                    # cam2world2 = np.matmul(camera_R,rotX90)
+                    camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(camera_R,order='ZYX')
+                    rotZwimu = np.asarray(Rotation.from_euler('Z', camRzi, degrees=True).as_matrix())
                     rotYwimu = np.asarray(Rotation.from_euler('Y', camRyi, degrees=True).as_matrix())
                     rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
                     rotIMU = np.matmul(rotYwimu,rotXwimu)
-                    cam2world_norm = np.matmul(rotIMU,cam2world2)
+                    cam2world_norm = np.matmul(rotZwimu,rotIMU)
+                    # asd=1
+                    # unitX=np.array([1.0,0.0,0.0])
+                    # vecX1=rotIMU@unitX
+                    # vecX2=camera_R@unitX
+                    # ang=math.degrees(angle_between(vecX1,vecX2))
+                    # print(camera_R)
+                    # print(np.matmul(rotZwimu,rotIMU)@camera_R.T)
+                    # print(camRzi,camRyi,camRxi)
+                    # print(math.radians(camRzi),math.radians(camRyi),math.radians(camRxi))
+                    # print(vecX1,vecX2)
+                    # print(ang)
+
+
                     # Rc2w_1D = np.reshape(cam2world_norm,9)
                     # gravityC=np.array([0.0,0.0,-1.0])
                     # gravityW=np.array([0.0,0.0,-1.0])
@@ -317,17 +346,24 @@ def process(filenames):
                     # ang_diff = angle_between(gravityW,unitCGinW_norm)
                     # print(gravityW,unitCGinW_norm,math.degrees(ang_diff))
                     camX1w=np.matmul(cam2world_norm,np.array([1.0,0.0,0.0]))
-                    beta=math.atan2(camX1w[1],camX1w[0])
+                    # phi=math.atan2(camX1w[1],camX1w[0])
                     # angle_dpt_in_world = math.atan2(objX1w[1],objX1w[0]) #theta
-                    rotZphiZ = np.asarray(Rotation.from_euler('Z', beta, degrees=False).as_matrix())
-                    c2w_pred = np.matmul(np.matmul(rotIMU.T,rotZphiZ),rotX90.T)
-                    Rimu_1D = np.reshape(rotIMU.T,9)
-
+                    # rotZphiZ = np.asarray(Rotation.from_euler('Z', beta, degrees=False).as_matrix())
+                    # c2w_pred = np.matmul(np.matmul(rotIMU.T,rotZphiZ),rotX90.T)
+                    # Rimu_1D = np.reshape(rotIMU.T,9)
+                    # print("\nvalues")
                     objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0]))
-                    objX1c=np.matmul(np.linalg.inv(cam2world_norm),objX1w)
+                    objX1w[2]*=0
+                    objX1w = unit_vector(objX1w)
+                    theta=math.atan2(objX1w[1],objX1w[0])
+                    # print(objX1w)
+                    rotZphiZ = np.asarray(Rotation.from_euler('Z', -math.radians(camRzi), degrees=False).as_matrix())
+                    objX1c=np.matmul(rotZwimu.T,objX1w)
+                    # print(objX1c)
                     objX1c = unit_vector(objX1c)
                     angle_dpt = math.atan2(objX1c[1],objX1c[0]) #alpha
                     dir_pointC = objX1c[:2]
+
                     rotZ_alpha = np.asarray(Rotation.from_euler('Z', angle_dpt, degrees=False).as_matrix())
                     # unitCx=np.matmul(rotZ_alpha,np.array([1.0,0.0,0.0])) 
                     # ang_diff = angle_between(objX1c,unitCx)
@@ -350,9 +386,10 @@ def process(filenames):
                     # ax = plt.figure().add_subplot(projection="3d", proj_type="ortho")
                     # plot_rotated_axes(ax, r0, name="W", offset=(0, 0, 0))                    
                     # plot_rotated_axes(ax, Rotation.from_matrix(camera_R), name="c_o", offset=(2, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(camera_R,rotX90)), name="", offset=(4, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(np.matmul(rotIMU,camera_R),rotX90)), name="cz", offset=(6, 0, 0))
-                    # plot_rotated_axes(ax, Rotation.from_matrix(c2w_pred), name="c_o", offset=(8, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(camera_R,rotIMU)), name="", offset=(4, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU,camera_R)), name="", offset=(6, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(camera_R,rotIMU.T)), name="", offset=(8, 0, 0))
+                    # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU.T,camera_R)), name="", offset=(10, 0, 0))
                     # # plot_rotated_axes(ax, Rotation.from_matrix(np.matmul(rotIMU,cam2world2)), name="c", offset=(6, 0, 0))
                     # ### Plotting the original direction angle into the world on each coordinate system
                     # ax.plot([0.0,0.0+objX1w[0]/np.max(abs(objX1w))], [0.0,objX1w[1]/np.max(abs(objX1w))], [0.0,objX1w[2]/np.max(abs(objX1w))], "#ff00ca")
@@ -404,8 +441,11 @@ def process(filenames):
                     # row.append(math.degrees(angle_dpt))
                     for elem in dir_pointC:
                         row.append(elem)
-                    for elem in Rc2w_1D:
-                        row.append(elem)
+                    # for elem in Rc2w_1D:
+                    #     row.append(elem)
+                    row.append(math.radians(camRzi))
+                    row.append(math.radians(camRyi))
+                    row.append(math.radians(camRxi))
                     new_csv.append(row)
 
                     R = np.array([[row[5],row[6]],[row[7],row[8]]]).astype(np.float64)

@@ -23,7 +23,7 @@ def world2cam(poses: dict):
 
 # root to images
 kitti_root = "/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/"
-sequence = "2013_05_28_drive_0009_sync"
+sequence = "2013_05_28_drive_0010_sync"
 cameraID = "image_00"
 kitti_images_root = os.path.join(kitti_root,"data_2d_raw",sequence,cameraID,"data_rect")
 poses_path = os.path.join(kitti_root,"data_poses",sequence,"cam0_to_world.txt")
@@ -72,8 +72,8 @@ for img in all_images:
 
 # kapture.filter_dataset_by_keeping(kapture_sensors_root, target_filtered_root, keep=4)
 
-# kapture.make_images_list_filtered(
-#     os.path.abspath(os.path.join(target_root, "sensors/records_data")),
-#     os.path.join(target_filtered_root, "images_list.txt"),
-#     keep=4
-# )
+kapture.make_images_list_filtered(
+    os.path.abspath(os.path.join(target_root, "sensors/records_data")),
+    os.path.join(target_filtered_root, "images_list.txt"),
+    keep=4
+)

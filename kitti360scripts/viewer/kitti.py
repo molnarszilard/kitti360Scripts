@@ -36,7 +36,7 @@ def parse_poses(path):
     
     idxs = poses[:, 0]
 
-    transforms = poses[:, 1:].reshape((-1, 3, 4))
+    transforms = poses[:, 1:13].reshape((-1, 3, 4))
 
     for i in range(len(idxs)):
         pose_dict[idxs[i]] = np.concatenate((transforms[i], np.array([0.,0.,0.,1.]).reshape(1,4)))

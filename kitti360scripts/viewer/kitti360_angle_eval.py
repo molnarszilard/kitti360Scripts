@@ -21,13 +21,13 @@ import geometry_utils
 np.set_printoptions(suppress=True, precision=6)
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--folder',default='/mnt/ssd2/datasets/kitti360_pose3_veh_build/',
+parser.add_argument('--folder',default='/mnt/ssd2/datasets/kitti360_pose_veh/',
                     help='the root folder')
-parser.add_argument('--labels',default='labels_pred289/',
+parser.add_argument('--labels',default='labels_pred/',
                     help='the labels folder')
 parser.add_argument('--kitti_root',default='/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/',
                     help='the root of the kitti folder of original data')
-parser.add_argument('--sequence', default='2013_05_28_drive_0009_sync',
+parser.add_argument('--sequence', default='2013_05_28_drive_0010_sync',
                     help='the sequence')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
@@ -40,8 +40,8 @@ args = parser.parse_args()
 N = 1000
 all_classes = ['building','pole','traffic light','traffic sign','person','rider','car','truck','bus','caravan','trailer','train','motorcycle','bicycle','garage','stop','smallpole','lamp','trash bin','vending machine']
 # chosen_classes = ['car','rider','truck','bus','caravan','trailer','train','motorcycle','bicycle']
-# chosen_classes = ['car','truck','bus','caravan','trailer','train']
-chosen_classes = ['car','truck','bus','caravan','trailer','train','building']
+chosen_classes = ['car','truck','bus','caravan','trailer','train']
+# chosen_classes = ['car','truck','bus','caravan','trailer','train','building']
 # chosen_classes = ['car']
 # chosen_classes = all_classes
 
@@ -270,7 +270,8 @@ def process():
             except:
                 valid_key-=1
         camera_R = camera_tr[:3, :3]
-        
+        # if frame>2:
+        #     exit()
         img_rgb = cv2.imread(os.path.join(base,images,filename[:-3]+'png'))
         H,W = img_rgb.shape[:2]
         label_path = os.path.join(base,args.labels,filename[:-3]+'txt')
@@ -309,14 +310,15 @@ def process():
             for row in csvreader:
                 counter+=1
                 if counter==0:
-                    row.append('dpt_angle_error(deg)')
+                    # row.append('dpt_angle_error(deg)')
+                    row[15]="theta"
                     base_csv.append(row)
                     continue
                 ids.append([int(float(row[3])),int(float(row[4]))])
-                row.append(0.0)
+                # row.append(0.0)
                 base_csv.append(row)
                 R = np.array([[row[5],row[6]],[row[7],row[8]]]).astype(np.float64)
-                Rc2w = np.array([[row[15],row[16],row[17]],[row[18],row[19],row[20]],[row[21],row[22],row[23]]]).astype(np.float64)
+                # Rc2w = np.array([[row[15],row[16],row[17]],[row[18],row[19],row[20]],[row[21],row[22],row[23]]]).astype(np.float64)
                 w = float(row[9])*2
                 h = float(row[10])*2
                 cx = float(row[11])
@@ -364,15 +366,42 @@ def process():
         
         ### refine the camera2world rotation matrix
         rotX90 = np.asarray(Rotation.from_euler('X', 90, degrees=True).as_matrix())
-        cam2world2 = np.matmul(camera_R,rotX90)
-        camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(cam2world2),order='ZYX')
+        # cam2world2 = np.matmul(camera_R,rotX90)
+        # camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(cam2world2),order='ZYX')
+        # rotYwimu = np.asarray(Rotation.from_euler('Y', camRyi, degrees=True).as_matrix())
+        # rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
+        # rotIMU = np.matmul(rotYwimu,rotXwimu)
+        # if args.imu:
+        #     cam2world_norm = np.matmul(rotIMU,cam2world2)
+        # else:
+        #     cam2world_norm = cam2world2
+
+        # cam2world2 = np.matmul(camera_R,rotX90)
+        # camRzi0,camRyi,camRxi = geometry_utils.decompose_camera_rotation(cam2world2,order='ZYX')
+        # rotZwimu = np.asarray(Rotation.from_euler('Z', camRzi0, degrees=True).as_matrix())
+        # rotYwimu = np.asarray(Rotation.from_euler('Y', camRyi, degrees=True).as_matrix())
+        # rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
+        # rotIMU = np.matmul(rotYwimu,rotXwimu,rotX90.T)
+        # cam2world_norm = np.matmul(rotZwimu,rotIMU)
+
+        # cam2world2 = np.matmul(camera_R,rotX90)
+        camRzi,camRyi,camRxi = geometry_utils.decompose_camera_rotation(camera_R,order='ZYX')
+        rotZwimu = np.asarray(Rotation.from_euler('Z', camRzi, degrees=True).as_matrix())
         rotYwimu = np.asarray(Rotation.from_euler('Y', camRyi, degrees=True).as_matrix())
         rotXwimu = np.asarray(Rotation.from_euler('X', camRxi, degrees=True).as_matrix())
         rotIMU = np.matmul(rotYwimu,rotXwimu)
-        if args.imu:
-            cam2world_norm = np.matmul(rotIMU,cam2world2)
-        else:
-            cam2world_norm = cam2world2
+        cam2world_norm = np.matmul(rotZwimu,rotIMU)
+
+        # unitX=np.array([1.0,0.0,0.0])
+        # vecX1=rotIMU@unitX
+        # vecX2=camera_R@unitX
+        # ang=math.degrees(angle_between(vecX1,vecX2))
+        # print(camera_R)
+        # print(np.matmul(rotZwimu,rotIMU)@camera_R.T)
+        # print(camRzi,camRyi,camRxi)
+        # print(math.radians(camRzi),math.radians(camRyi),math.radians(camRxi))
+        # print(vecX1,vecX2)
+        # print(ang)
 
         
         objects_classs0_this_frame = 0
@@ -388,8 +417,7 @@ def process():
                 frame_matched_cl1=True
                 objects_classs1_this_frame +=1
 
-            base_csv[matches[i,0]+1][13]=math.cos(-dpt_angle)
-            base_csv[matches[i,0]+1][14]=math.sin(-dpt_angle)
+            
             base_csv[matches[i,0]+1][9] = wp/2
             base_csv[matches[i,0]+1][10] = hp/2
             base_csv[matches[i,0]+1][11] = cxp
@@ -398,7 +426,12 @@ def process():
             base_csv[matches[i,0]+1][6] = -math.sin(math.radians(angle_obbp))
             base_csv[matches[i,0]+1][7] = math.sin(math.radians(angle_obbp))
             base_csv[matches[i,0]+1][8] = math.cos(math.radians(angle_obbp))
-            new_csv.append(base_csv[matches[i,0]+1])
+            
+
+            base_csv[matches[i,0]+1][13]=math.cos(-dpt_angle)
+            base_csv[matches[i,0]+1][14]=math.sin(-dpt_angle)
+
+            # a_vect=np.array([math.cos(-dpt_angle),math.sin(-dpt_angle),0])
 
             dpt_angle_gt=math.atan2(dpt_pointCy_gt,dpt_pointCx_gt)
             a=min(w,h)/2
@@ -415,16 +448,16 @@ def process():
             objX1w = unit_vector(objX1w)
             theta = math.atan2(objX1w[1],objX1w[0])
 
-            phiZ = theta+dpt_angle
+            phiZ = dpt_angle+theta
             rotZphiZ = np.asarray(Rotation.from_euler('Z', phiZ, degrees=False).as_matrix())
-            if args.imu:
-                Rc2w_pred = np.matmul(np.matmul(rotIMU.T,rotZphiZ),rotX90.T)
-            else:
-                Rc2w_pred = np.matmul(rotZphiZ,rotX90.T)
+            Rc2w_pred = np.matmul(rotZphiZ,rotYwimu,rotXwimu)
             Rc2w_pred_1D = np.reshape(Rc2w_pred,9)    
-            base_csv[matches[i,0]+1][15:24]=Rc2w_pred_1D
-            
-            
+            base_csv[matches[i,0]+1][15:19]=[theta,math.radians(camRyi),math.radians(camRxi)]
+
+            new_csv.append(base_csv[matches[i,0]+1])
+            # newa = Rc2w_pred@a_vect
+            # print(a_vect)
+            # print(newa)
             img_rgb = cv2.ellipse(img_rgb, (int(cx),int(cy)), (int(w/2),int(h/2)), angle_obb, 0, 360, get_color('green'), 2)
             img_rgb = cv2.ellipse(img_rgb, (int(cxp),int(cyp)), (int(wp/2),int(hp/2)), angle_obbp, 0, 360, get_color('purple'), 2)
             img_rgb = cv2.arrowedLine(img_rgb, (int(cx),int(cy)), (int(px),int(py)), get_color('green'), 2)
@@ -436,7 +469,7 @@ def process():
             unitCx=np.array([1.0,0.0,0.0])
             dirVectC_pred = np.matmul(rotZ_angle_dpt_pred,unitCx)
             dirVectC_gt = np.matmul(rotZ_angle_dpt_gt,unitCx)
-            dirVectW_pred = np.matmul(cam2world_norm,dirVectC_pred)
+            dirVectW_pred = np.matmul(Rc2w_pred,dirVectC_pred)
             dirVectW_gt = np.matmul(cam2world_norm,dirVectC_gt)
 
             unit_c2w_pred = np.matmul(Rc2w_pred,unitCx)
@@ -451,7 +484,7 @@ def process():
             total_angle_diffs_camera.append(ang_diff_camera)
             total_angle_diffs_world.append(ang_diff_world)
             total_angle_diffs_conversion.append(abs(ang_diff_camera-ang_diff_world))
-            base_csv[matches[i,0]+1][24]=ang_diff_camera
+            # base_csv[matches[i,0]+1][19]=ang_diff_camera
 
         if len(matches)!=len(ellipse_csv):
             for i in range(len(ellipse_csv)):
