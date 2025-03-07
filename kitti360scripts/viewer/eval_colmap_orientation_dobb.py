@@ -23,18 +23,19 @@ parser.add_argument('--sequence', default='2013_05_28_drive_0010_sync',
                     help='the sequence')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
-parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_temp/',
+parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_pose3_veh_build/',
                     help='the root folder of the results')
 parser.add_argument('--list', default='/mnt/ssd2/datasets/kitti360_pose3_veh_build/2013_05_28_drive_0010_sync/frames_class_both.txt',  #'/mnt/ssd2/datasets/kitti360_pose2_veh_build/2013_05_28_drive_0010_sync/frames_class_both.txt'
                     help='path to a txt file, which contains the frames that should be considered in the comparison')
 args = parser.parse_args()
 
 camera = Camera(root_dir=args.kitti_root, seq=args.sequence)
-csv_labels_folder='ellipse_dir_data_pred/'
+csv_labels_folder=os.path.join(args.cameraID,'ellipse_dir_data_pred/')
 
 ### Creating Output structure
 base=os.path.join(args.result_folder,args.sequence)
-colmap_results_path=os.path.join(args.kitti_root,'colmap_results',args.sequence+'_sparse.txt')
+colmap_results_path=os.path.join(args.kitti_root,'colmap_results',args.sequence+'_kapture.txt')
+colmap_loclist_path=os.path.join(args.kitti_root,'colmap_results',args.sequence+'_kapture_localization.txt')
 new_csv_path='cm_rmatrices'
 
 def plot_rotated_axes(ax, r, name=None, offset=(0, 0, 0), scale=1):
@@ -89,11 +90,22 @@ def read_csv(frame,camera_R):
             counter+=1
             if counter==0:
                 continue
-            Rc2w = np.array([[row[15],row[16],row[17]],[row[18],row[19],row[20]],[row[21],row[22],row[23]]]).astype(np.float64)
+            # Rc2w = np.array([[row[15],row[16],row[17]],[row[18],row[19],row[20]],[row[21],row[22],row[23]]]).astype(np.float64)
+            dirX=float(row[13])
+            dirY=float(row[14])
+            theta=float(row[15])
+            rotY=float(row[16])
+            rotX=float(row[17])
+            dpt_angle = math.atan2(dirY,dirX)
+            phiZ = theta-dpt_angle
+            rotZwimu = np.asarray(Rotation.from_euler('Z', phiZ, degrees=False).as_matrix())
+            rotYwimu = np.asarray(Rotation.from_euler('Y', rotY, degrees=False).as_matrix())
+            rotXwimu = np.asarray(Rotation.from_euler('X', rotX, degrees=False).as_matrix())
+            Rc2w = rotZwimu@rotYwimu@rotXwimu
             ref=np.array([1.0,0.0,0.0])
-            colmapX = np.matmul(Rc2w,ref)
+            dobbX = np.matmul(Rc2w,ref)
             cameraX = np.matmul(camera_R,ref)
-            ang_diff = angle_between(colmapX,cameraX)
+            ang_diff = angle_between(dobbX,cameraX)
             if ang_diff<min_angle:
                 min_angle=ang_diff
                 min_R=Rc2w
@@ -134,12 +146,26 @@ def process():
         frames2check=np.asarray(frames2check)
     else:
         exit()
-
+    f_label = open(colmap_loclist_path, "r")
+    Lines_colmap_loclist = f_label.readlines()
+    f_label.close()
+    locframes_colmap = []
+    for line in Lines_colmap_loclist:
+        locframes_colmap.append(int(os.path.splitext(line[:-1])[0]))
     f_label = open(colmap_results_path, "r")
     Lines_colmap = f_label.readlines()
     f_label.close()
-    colmap_results=[]
     line_number=-1
+    number_of_frames = 0
+    for line in Lines_colmap:
+        if line.startswith('#'):
+            continue
+        current_line = line[:-1]
+        elements=current_line.split(" ")
+        frame = int(os.path.splitext(elements[9])[0])
+        if frame>number_of_frames:
+            number_of_frames=frame
+    colmap_results=np.zeros((number_of_frames+1,8))
     for line in Lines_colmap:
         if line.startswith('#'):
                 continue
@@ -157,10 +183,12 @@ def process():
         ty = float(elements[6])
         tz = float(elements[7])
         camera_ID = int(elements[8]) # using only 1 camera, so should be 1 all the time
-        if camera_ID!=1:
-            print("Camera is not 1, but %d"%(camera_ID))
+        # if camera_ID!=1:
+        #     print("Camera is not 1, but %d"%(camera_ID))
         frame = int(os.path.splitext(elements[9])[0])
-        colmap_results.append([frame,qw,qx,qy,qz,tx,ty,tz])
+        # colmap_results.append([frame,qw,qx,qy,qz,tx,ty,tz])
+        if not frame in locframes_colmap:
+            colmap_results[frame]=frame,qw,qx,qy,qz,tx,ty,tz
 
     # colmap_results=sorted(colmap_results, key=lambda x: x[0])
     colmap_results=np.asarray(colmap_results)
@@ -170,8 +198,10 @@ def process():
     row.append('angle_diff_cm')
     row.append('angle_diff_GT')
     row.append('angle_diff_dobb')
-    row.append('cm_error')
-    row.append('dobb_error')
+    row.append('cm_error_rel')
+    row.append('dobb_error_rel')
+    row.append('cm_error_abs')
+    row.append('dobb_error_abs')
     row.append('Rc2w-11')
     row.append('Rc2w-12')
     row.append('Rc2w-13')
@@ -188,7 +218,9 @@ def process():
         if len(colmap_results)>frame:
             colmap_estimate = colmap_results[frame]
         else:
-            break
+            continue
+        if colmap_estimate[0]==0:
+            continue
 
         row = []
         row.append(f'{frame:010d}.png')
@@ -212,6 +244,7 @@ def process():
         ### camera_tr --> Tr(cam_0 -> world)
         # camera_tr = camera.cam2world[frame]
         camera_R = camera_tr[:3, :3]
+        camera_T = camera_tr[:3, 3]
         dobb_R = read_csv(frame,camera_R)
         if first_frame:
             first_frame=False
@@ -229,6 +262,10 @@ def process():
         ang_diff_colmap = angle_between(colmap_prev,colmap_current)
         ang_diff_camera = angle_between(camera_prev,camera_current)
         ang_diff_dobb = angle_between(dobb_prev,dobb_current)
+
+        ang_diff_current_camera = angle_between(camera_current,colmap_current)
+        ang_diff_current_dobb = angle_between(camera_current,dobb_current)
+
         error_cm = abs(math.atan2(math.sin(ang_diff_colmap - ang_diff_camera),math.cos(ang_diff_colmap - ang_diff_camera)))
         error_dobb = abs(math.atan2(math.sin(ang_diff_dobb - ang_diff_camera),math.cos(ang_diff_dobb - ang_diff_camera)))
 
@@ -238,6 +275,8 @@ def process():
         row.append(math.degrees(ang_diff_dobb))
         row.append(math.degrees(error_cm))
         row.append(math.degrees(error_dobb))
+        row.append(math.degrees(ang_diff_current_camera))
+        row.append(math.degrees(ang_diff_current_dobb))
         Rcolmap_1D = np.reshape(Rcolmap,9)
         for elem in Rcolmap_1D:
             row.append(elem)

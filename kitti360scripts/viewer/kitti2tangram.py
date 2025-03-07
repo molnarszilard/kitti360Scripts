@@ -27,25 +27,25 @@ N = 1000
 # all_classes_sID=[11,17,19,20,24,25,26,27,28,29,30,31,32,33,34,36,37,38,39,40]
 # chosen_classes = ['car','rider','truck','bus','caravan','trailer','train','motorcycle','bicycle']
 # chosen_classes_sID=[26,25,27,28,29,30,31,32,33]
-# chosen_classes = ['car','truck','bus','caravan','trailer','train']
-# chosen_classes_sID=[26,27,28,29,30,31]
+chosen_classes = ['car','truck','bus','caravan','trailer','train']
+chosen_classes_sID=[26,27,28,29,30,31]
 # chosen_classes = ['car']
 # chosen_classes_sID=[26]
-chosen_classes = ['car','truck','bus','caravan','trailer','train','building']
-chosen_classes_sID=[26,27,28,29,30,31,11]
+# chosen_classes = ['car','truck','bus','caravan','trailer','train','building']
+# chosen_classes_sID=[26,27,28,29,30,31,11]
 # chosen_classes = all_classes
 
-sequences = ['2013_05_28_drive_0000_sync',
-             '2013_05_28_drive_0002_sync',
-             '2013_05_28_drive_0003_sync',
-             '2013_05_28_drive_0004_sync',
-             '2013_05_28_drive_0005_sync',
-             '2013_05_28_drive_0006_sync',
-             '2013_05_28_drive_0007_sync',
-             '2013_05_28_drive_0009_sync',
-             '2013_05_28_drive_0010_sync']
+# sequences = ['2013_05_28_drive_0000_sync',
+#              '2013_05_28_drive_0002_sync',
+#              '2013_05_28_drive_0003_sync',
+#              '2013_05_28_drive_0004_sync',
+#              '2013_05_28_drive_0005_sync',
+#              '2013_05_28_drive_0006_sync',
+#              '2013_05_28_drive_0007_sync',
+#              '2013_05_28_drive_0009_sync',
+#              '2013_05_28_drive_0010_sync']
 
-# sequences = ['2013_05_28_drive_0000_sync']
+sequences = ['2013_05_28_drive_0003_sync']
 
 if not os.path.exists(args.result_folder):
     os.makedirs(args.result_folder)

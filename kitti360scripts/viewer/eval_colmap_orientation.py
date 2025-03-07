@@ -24,7 +24,7 @@ parser.add_argument('--list', default='/mnt/ssd2/datasets/kitti360_pose2_veh_bui
                     help='path to a txt file, which contains the frames that should be considered in the comparison')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
-parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_temp/',
+parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_pose2_veh_build/',
                     help='the root folder of the results')
 args = parser.parse_args()
 
@@ -32,7 +32,7 @@ camera = Camera(root_dir=args.kitti_root, seq=args.sequence)
 
 ### Creating Output structure
 base=os.path.join(args.result_folder,args.sequence)
-colmap_results_path=os.path.join(args.kitti_root,'colmap_results',args.sequence+'.txt')
+colmap_results_path=os.path.join(args.kitti_root,'colmap_results',args.sequence+'_kapture.txt')
 new_csv_path='cm_rmatrices'
 
 ### Comparing two 3 dimensional vectors
