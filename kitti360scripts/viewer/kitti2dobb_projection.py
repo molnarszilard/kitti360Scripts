@@ -16,20 +16,31 @@ import pandas as pd
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 import geometry_utils
+import utils
 
 np.set_printoptions(suppress=True, precision=6)
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--kitti_root',default='/mnt/cuda_external_5TB/datasets/kitti/kitti360/KITTI-360/',
                     help='the root of the kitti folder of original data')
-parser.add_argument('--sequence', default='2013_05_28_drive_0000_sync',
+parser.add_argument('--sequence', default='2013_05_28_drive_0010_sync',
                     help='the sequence')
 parser.add_argument('--cameraID', default='image_00',
                     help='default camera ID')
 parser.add_argument('--multiprocess', default=1,type=int,
-                    help='number of parallell processes')
-parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360_pose_veh/',
+                    help='number of parallell processes, might result in errors')
+parser.add_argument('--result_folder',default='/mnt/ssd2/datasets/kitti360/kitti360_pose_veh_all/',
                     help='the root folder of the results')
+parser.add_argument('--csv_labels_folder',default='ellipse_data/',
+                    help='the root folder of the results')
+parser.add_argument('--new_csv_labels_folder',default='ellipse_dir_data_gt/',
+                    help='the root folder of the results')
+parser.add_argument('--only_frame', default=-1,type=int,
+                    help='only process the frame with this number (negative number turns this option off)')
+parser.add_argument('--threeD', default=False, action='store_true',
+                    help='do you want 3d direction?')
+parser.add_argument('--plotBB', default=False, action='store_true',
+                    help='do you want to plot the 3D BB in the image?')
 args = parser.parse_args()
 
 N = 1000
@@ -46,8 +57,8 @@ base=os.path.join(args.result_folder,args.sequence)
 new_images='images/'
 new_plots='plots'
 new_labels='labels/'
-csv_labels_folder=os.path.join(args.cameraID,'ellipse_data/')
-new_csv_labels_folder=os.path.join(args.cameraID,'ellipse_dir_data_gt/')
+csv_labels_folder=os.path.join(args.cameraID,args.csv_labels_folder)
+new_csv_labels_folder=os.path.join(args.cameraID,args.new_csv_labels_folder)
 if not os.path.exists(os.path.join(base,new_labels)):
     os.makedirs(os.path.join(base,new_labels))
 if not os.path.exists(os.path.join(base,new_images)):
@@ -79,151 +90,12 @@ poses = postprocessPoses(poses)
 cam2velo = np.array([[0.04307104361, -0.08829286498, 0.995162929, 0.8043914418],[-0.999004371, 0.007784614041, 0.04392796942, 0.2993489574],[-0.01162548558, -0.9960641394, -0.08786966659, -0.1770225824],[0.0,0.0,0.0,1.0]])
 cam2imu = np.array([[0.0371783278,-0.0986182135,0.9944306009,1.5752681039],[0.9992675562,-0.0053553387,-0.0378902567,0.0043914093],[0.0090621821,0.9951109327,0.0983468786,-0.6500000000]])
 
-def xywhr2xyxyxyxy(rboxes):
-    ctr = rboxes[:2]
-    w, h, angle = rboxes[2:5]
-    cos_value, sin_value = math.cos(angle), math.sin(angle)
-    vec1 = [w / 2 * cos_value, w / 2 * sin_value]
-    vec2 = [-h / 2 * sin_value, h / 2 * cos_value]
-    pt1 = ctr + vec1 + vec2
-    pt2 = ctr + vec1 - vec2
-    pt3 = ctr - vec1 - vec2
-    pt4 = ctr - vec1 + vec2
-    corners = np.stack([pt1, pt2, pt3, pt4], axis=-2)
-    return corners
-
-def get_color(cls,max=10):
-    if isinstance(cls,int):
-        if cls%max==0: #plane
-            return (0,128,255) #orange
-        elif cls%max==1: #ship
-            return (255,0,255) #fuchsia
-        elif cls%max==2: # large vehicle
-            return (255,0,0) #blue
-        elif cls%max==3: # small vehicle
-            return (255,255,0) #cyan
-        elif cls%max==4: # helicopter
-            return (255,0,128) #purple
-        elif cls%max==5: # 
-            return (255,153,255) # pink
-        elif cls%max==6: 
-            return (0,255,255) #yellow
-        elif cls%max==7: 
-            return (128,0,255) #magenta
-        elif cls%max==8: 
-            return (255,255,255) #white
-        elif cls%max==9: 
-            return (128,255,0) #teal
-        elif cls%max==10:
-            return (0,0,0) #black
-        elif cls%max==11:
-            return (0,255,0) #green
-        elif cls%max==12:
-            return (0,0,255) #red
-        else:
-            # print("Try another class.")
-            return (0,0,0) #black
-    else:
-        if cls=='orange': #plane
-            return (0,128,255) #orange
-        elif cls=='fuchsia': #ship
-            return (255,0,255) #fuchsia
-        elif cls=='blue': # large vehicle
-            return (255,0,0) #blue
-        elif cls=='cyan': # small vehicle
-            return (255,255,0) #cyan
-        elif cls=='purple': # helicopter
-            return (255,0,128) #purple
-        elif cls=='pink':
-            return (255,153,255) #pink
-        elif cls=='yellow': # special 2
-            return (0,255,255) #yellow
-        elif cls=='magenta':
-            return (128,0,255) #magenta
-        elif cls=='white': # special 4
-            return (255,255,255) #white
-        elif cls=='teal': # container crane
-            return (128,255,0) #teal
-        elif cls=='black':
-            return (0,0,0) #black
-        elif cls=='green': # special 3
-            return (0,255,0) #green        
-        elif cls=='red': # special 1
-            return (0,0,255) #red
-        
-        elif cls=='yolored':
-            return (59,57,253) #yolo detection red        
-        else:
-            print("Try another class.")
-            return (0,0,0) #black
-
-
-### Comparing two 3 dimensional vectors
-### From https://stackoverflow.com/a/13849249
-def unit_vector(vector):
-    """ Returns the unit vector of the vector.  """
-    return vector / np.linalg.norm(vector)
-
-def angle_between(v1, v2):
-    """ Returns the angle in radians between vectors 'v1' and 'v2'::
-
-            >>> angle_between((1, 0, 0), (0, 1, 0))
-            1.5707963267948966
-            >>> angle_between((1, 0, 0), (1, 0, 0))
-            0.0
-            >>> angle_between((1, 0, 0), (-1, 0, 0))
-            3.141592653589793
-    """
-    v1_u = unit_vector(v1)
-    v2_u = unit_vector(v2)
-    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-
-def plot_rotated_axes(ax, r, name=None, offset=(0, 0, 0), scale=1):
-    colors = ("#FF6666", "#005533", "#1199EE")  # Colorblind-safe RGB
-    loc = np.array([offset, offset])
-    for i, (axis, c) in enumerate(zip((ax.xaxis, ax.yaxis, ax.zaxis),colors)):
-        axlabel = axis.axis_name
-        axis.set_label_text(axlabel)
-        axis.label.set_color(c)
-        axis.line.set_color(c)
-        axis.set_tick_params(colors=c)
-        line = np.zeros((2, 3))
-        line[1, i] = scale
-        line_rot = r.apply(line)
-        line_plot = line_rot + loc
-        ax.plot(line_plot[:, 0], line_plot[:, 1], line_plot[:, 2], c)
-        text_loc = line[1]*1.2
-        text_loc_rot = r.apply(text_loc)
-        text_plot = text_loc_rot + loc[0]
-        ax.text(*text_plot, axlabel.upper(), color=c,
-                va="center", ha="center")
-    ax.text(*offset, name, color="k", va="center", ha="center",
-            bbox={"fc": "w", "alpha": 0.8, "boxstyle": "circle"})
-
-def rotation_matrix_from_vectors(vec1, vec2):
-    """ Find the rotation matrix that aligns vec1 to vec2
-    :param vec1: A 3d "source" vector
-    :param vec2: A 3d "destination" vector
-    :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
-    """
-    a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
-    v = np.cross(a, b)
-    if any(v): #if not all zeros then 
-        c = np.dot(a, b)
-        s = np.linalg.norm(v)
-        kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-        return np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
-
-    else:
-        return np.eye(3) #cross of all zeros only occurs on identical directions
-
-
 def process(filenames):
     for filename in filenames:
         frame = int(os.path.splitext(filename)[0])
         # if frame%10:
         #     continue
-        if frame!=470:
+        if args.only_frame>=0 and frame!=args.only_frame:
             continue
         # if frame>2:
         #     exit()
@@ -244,8 +116,7 @@ def process(filenames):
         camera_K = camera.K
         camera_height = camera.height
         camera_width = camera.width
-        # current_imu_pose = poses[np.where(ts == valid_key)[0][0]] 
-
+        # current_imu_pose = poses[np.where(ts == valid_key)[0][0]]
         
         if not os.path.exists(os.path.join(kitti_image,filename[:-3]+'png')):
             exit()
@@ -264,12 +135,13 @@ def process(filenames):
         with open(os.path.join(base,csv_labels_folder, filename), newline='') as csvfile:
             csvreader = csv.reader(csvfile, delimiter=';', quotechar='|')
             counter = -1
-            for row in csvreader:
-                
+            for row in csvreader:                
                 counter+=1
-                if counter==0:
+                if counter==0: ### Reading and appending the header
                     row.append('directionX')
                     row.append('directionY')
+                    if args.threeD:
+                        row.append('directionZ')
                     # row.append('Rc2w-11')
                     # row.append('Rc2w-12')
                     # row.append('Rc2w-13')
@@ -292,41 +164,17 @@ def process(filenames):
                 if obj:
                     if not obj.name in chosen_classes:
                         continue
-                    # imu2worldR = current_imu_pose[:3,:3]
-                    # imuRzi,imuRyi,imuRxi = geometry_utils.decompose_camera_rotation(np.linalg.inv(imu2worldR),order='ZYX')
-                    # rotYwimu = np.asarray(Rotation.from_euler('Y', imuRyi, degrees=True).as_matrix())
-                    # rotXwimu = np.asarray(Rotation.from_euler('X', imuRxi, degrees=True).as_matrix())
-                    # rotYwimu180 = np.asarray(Rotation.from_euler('Y', 180, degrees=True).as_matrix())
-                    # rotIMU2 = np.matmul(rotYwimu180,np.matmul(rotYwimu,rotXwimu))
-                    # unitCY=np.array([0.0,0.0,1.0])
-                    # gravityW=np.array([0.0,0.0,-1.0])
-                    # unitCYinW = np.matmul(imu2worldR,unitCY)
-                    # unitCYinW_norm = np.matmul(rotIMU2,unitCYinW)
-                    # ang_diff = angle_between(gravityW,unitCYinW_norm)
-                    # print(gravityW,unitCYinW_norm,math.degrees(ang_diff))
-                    
-                    # rotX90 = np.asarray(Rotation.from_euler('X', 90, degrees=True).as_matrix())
-                    # rotZ90 = np.asarray(Rotation.from_euler('Z', 90, degrees=True).as_matrix())
-                    # unitCY=np.array([0.0,0.0,1.0])
-                    # ref=np.array([1.0,0.0,0.0])
-                    # cam2world2 = np.matmul(camera_R,rotX90)
-                    # rotZ,rotY,rotX = geometry_utils.decompose_camera_rotation(np.linalg.inv(cam2world2),order='ZYX')
-                    # rotYwimu = np.asarray(Rotation.from_euler('Y', rotY, degrees=True).as_matrix())
-                    # rotXwimu = np.asarray(Rotation.from_euler('X', rotX, degrees=True).as_matrix())
-                    # rotIMU = np.matmul(rotYwimu,rotXwimu)
-                    # cam2world_norm = np.matmul(rotIMU,cam2world2)
 
-
-
-                    # cam2world2 = np.matmul(camera_R,rotX90)
+                    ### Simple 3 rotation decomposition
                     rotZ,rotY,rotX = geometry_utils.decompose_camera_rotation(camera_R,order='ZYX')
                     rotZwimu = np.asarray(Rotation.from_euler('Z', rotZ, degrees=True).as_matrix())
                     rotYwimu = np.asarray(Rotation.from_euler('Y', rotY, degrees=True).as_matrix())
                     rotXwimu = np.asarray(Rotation.from_euler('X', rotX, degrees=True).as_matrix())
                     rotIMU = np.matmul(rotYwimu,rotXwimu)
                     cam2world_norm = np.matmul(rotZwimu,rotIMU)
+                    # Rc2w_1D = np.reshape(cam2world_norm,9)
 
-                    #
+                    ### 4 rotation decomposition
                     # rotX90 = np.asarray(Rotation.from_euler('X', 90, degrees=True).as_matrix())
                     # cam2world2 = np.matmul(camera_R,rotX90)
                     # rotZ,rotY,rotX = geometry_utils.decompose_camera_rotation(cam2world2,order='ZYX')
@@ -335,8 +183,9 @@ def process(filenames):
                     # rotXwimu = np.asarray(Rotation.from_euler('X', rotX, degrees=True).as_matrix())
                     # rotIMU = np.matmul(rotYwimu,rotXwimu)
                     # cam2world_norm = np.matmul(rotZwimu,rotIMU,rotX90.T)
+                    # Rc2w_1D = np.reshape(cam2world_norm,9)
                     
-                    asd=1
+                    ### Checking the matrix decomposition
                     # unitX=np.array([1.0,0.0,0.0])
                     # vecX1=rotIMU@unitX
                     # vecX2=camera_R@unitX
@@ -348,71 +197,34 @@ def process(filenames):
                     # print(vecX1,vecX2)
                     # print(ang)
 
+                    camX1w=np.matmul(camera_R,np.array([1.0,0.0,0.0])) ### Camera unit vector in world
+                    phi=math.atan2(camX1w[1],camX1w[0]) ### Camera rotation in workd (should be the same as rotZ)
 
-                    # Rc2w_1D = np.reshape(cam2world_norm,9)
-                    # gravityC=np.array([0.0,0.0,-1.0])
-                    # gravityW=np.array([0.0,0.0,-1.0])
-                    # unitCGinW = np.matmul(cam2world2,gravityC)
-                    # ang_diff = angle_between(gravityW,unitCGinW)
-                    # print(gravityW,unitCGinW,math.degrees(ang_diff))
-                    # unitCGinW_norm = np.matmul(rotIMU,unitCGinW)
-                    # ang_diff = angle_between(gravityW,unitCGinW_norm)
-                    # print(gravityW,unitCGinW_norm,math.degrees(ang_diff))
-                    camX1w=np.matmul(cam2world_norm,np.array([1.0,0.0,0.0]))
-                    # phi=math.atan2(camX1w[1],camX1w[0])
-                    # angle_dpt_in_world = math.atan2(objX1w[1],objX1w[0]) #theta
-                    # rotZphiZ = np.asarray(Rotation.from_euler('Z', beta, degrees=False).as_matrix())
-                    # c2w_pred = np.matmul(np.matmul(rotIMU.T,rotZphiZ),rotX90.T)
-                    # Rimu_1D = np.reshape(rotIMU.T,9)
-                    # print("\nvalues")
-                    objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0]))
-                    objX1w[2]*=0
-                    objX1w = unit_vector(objX1w)
-                    theta=math.atan2(objX1w[1],objX1w[0])
-                    # print(objX1w)
-                    rotZphiZ = np.asarray(Rotation.from_euler('Z', -math.radians(rotZ), degrees=False).as_matrix())
-                    objX1c=np.matmul(rotZwimu.T,objX1w)
+                    objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0])) ### Object direction vector in world
+                    if not args.threeD: ### In 2d we need to drop the Z coordinate to the XY plane
+                        objX1w[2]*=0
+                    objX1w = utils.unit_vector(objX1w) ### obj.R has scaling built in, let's create a unit vector
+                    theta=math.atan2(objX1w[1],objX1w[0]) ### Object rotation in world around the Z coordinate
+                    objX1c=np.matmul(rotZwimu.T,objX1w) ### Object direction vector in camera (same Z)
                     # print(objX1c)
-                    objX1c = unit_vector(objX1c)
-                    angle_dpt = math.atan2(objX1c[1],objX1c[0]) #alpha
-                    dir_pointC = objX1c[:2]
+                    objX1c = utils.unit_vector(objX1c)
+                    angle_dpt = math.atan2(objX1c[1],objX1c[0]) #alpha, this is the direction angle, that the DOBB needs to learn
+                    if not args.threeD:
+                        dir_pointC = objX1c[:2]
+                    else:
+                        dir_pointC = objX1c
 
-                    distance = math.sqrt((obj.T[0]-camera_tr[0,-1])**2+(obj.T[1]-camera_tr[1,-1])**2)
-                    rot = np.asarray(Rotation.from_euler('Z', rotZ+90, degrees=True).as_matrix())
+                    ### Print the ellipsoid coordinates for the MATLAB plotting
+                    ### distance = math.sqrt((obj.T[0]-camera_tr[0,-1])**2+(obj.T[1]-camera_tr[1,-1])**2)
+                    rot = np.asarray(Rotation.from_euler('Z', rotZ+90, degrees=True).as_matrix()) ## The coordinates needs to be in Velodyne coordinates, where Y is forward
                     new_vW=obj.T-camera_T
                     new_vC=rot.T@new_vW+[0.79,0.3,-0.18]
                     rot_w = np.asarray(Rotation.from_euler('Z', -theta, degrees=False).as_matrix())
                     vert = (rot_w@obj.vertices.T).T
-                    scale = (vert[:,1].max()-vert[:,1].min())/2, (vert[:,0].max()-vert[:,0].min())/2, (vert[:,2].max()-vert[:,2].min())/2
-                    this_ellipse = (new_vC[0],new_vC[1],new_vC[2],(vert[:,1].max()-vert[:,1].min())/2, (vert[:,0].max()-vert[:,0].min())/2, (vert[:,2].max()-vert[:,2].min())/2,math.degrees(angle_dpt),0,0)
-                    print(this_ellipse)
+                    this_ellipse = (new_vC[0],new_vC[1],new_vC[2],(vert[:,1].max()-vert[:,1].min())/2, (vert[:,0].max()-vert[:,0].min())/2, (vert[:,2].max()-vert[:,2].min())/2,math.degrees(angle_dpt),0,0) # Translation, Scale, Rotation
+                    # print(this_ellipse)
 
-                    # beta=math.atan2(obj.T[1]-camera_tr[1,-1],obj.T[0]-camera_tr[0,-1])
-                    # beta2=math.radians(rotZ+180)
-                    # beta3=beta2-math.radians(90-beta)
-                    # for_matlab_plotX=distance*math.cos(beta3)
-                    # for_matlab_plotY=distance*math.sin(beta3)
-                    # distZ=obj.T[2]-camera_tr[2,-1]
-                    rotZ_alpha = np.asarray(Rotation.from_euler('Z', angle_dpt, degrees=False).as_matrix())
-                    
-
-                    # unitCx=np.matmul(rotZ_alpha,np.array([1.0,0.0,0.0])) 
-                    # ang_diff = angle_between(objX1c,unitCx)
-                    # print(objX1c,step,math.degrees(ang_diff))
-
-                    # unitCX=np.array([1.0,0.0,0.0])
-                    # objXcnew=np.matmul(rotZ_alpha,unitCX)
-                    # objX1c[2]=0
-                    # ang_diff = angle_between(objX1c,objXcnew)
-                    # print(objX1c,objXcnew,math.degrees(ang_diff))
-                    # objXctow=np.matmul(cam2world_norm,np.matmul(rotZ_alpha,unitCX))
-                    # # objXctow=np.matmul(np.matmul(np.matmul(rotYz,np.matmul(rotY,rotX90)),rotY_alpha),unitCX)
-                    # ang_diff = angle_between(objX1w,objXctow)
-                    # print(objX1w,objXctow,math.degrees(ang_diff))
-                    # if math.degrees(ang_diff)>1:
-                    #     print(objX1w,objXctow,math.degrees(ang_diff))
-                    #     dummy=False
-
+                    ### PLOTTING THE AXES ###
                     # r0 = Rotation.identity()
                     # ax = plt.figure().add_subplot(projection="3d", proj_type="ortho")
                     # plot_rotated_axes(ax, r0, name="W", offset=(0, 0, 0))                    
@@ -442,33 +254,7 @@ def process(filenames):
                     # plt.tight_layout()
                     # plt.show()   
 
-                    # camX10w=np.matmul(camera_R,np.array([0.0,0.0,0.0]))
-                    # camX0velo=np.matmul(cam2velo,np.concatenate((np.array([0.0,0.0,0.0]),np.array([1.0]))))[:3]
-                    # camX1w=np.matmul(camera_R,np.array([1.0,0.0,0.0]))
-                    # camX1velo=np.matmul(cam2velo,np.concatenate((np.array([1.0,0.0,0.0]),np.array([1.0]))))[:3]
-                    # camX10w=np.matmul(camera_R,np.array([10.0,0.0,0.0]))
-                    # camX10velo=np.matmul(cam2velo,np.concatenate((np.array([10.0,0.0,0.0]),np.array([1.0]))))[:3]
-                    
-                    # WX0inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([0.0,0.0,0.0])))
-                    # WX1inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([1.0,0.0,0.0])))
-                    # WX10inVelo=np.matmul(cam2velo[:3,:3],np.matmul(np.linalg.inv(camera_R),np.array([10.0,0.0,0.0])))
-                    
-                    # beta = math.radians(rotZ)
-                    # beta=math.atan2(camX1w[1],camX1w[0])
-                    # angle_dpt_in_world = math.atan2(objX1w[1],objX1w[0]) #theta
-                    # camera_angleZ = -math.atan2(camera_R[1,0],camera_R[0,0]) #beta
-                    # print(math.degrees(beta),math.degrees(angle_dpt_in_world),math.degrees(angle_dpt),math.degrees(angle_dpt_in_world-beta+angle_dpt))
-                    
-                    # camRz,camRy,camRx = geometry_utils.decompose_camera_rotation(camera_R,order='ZYX')
-                    # print(camRz,camRy,camRx)
-                    # rot = np.asarray(Rotation.from_euler('ZYX', [camRz,camRy,camRx], degrees=True).as_matrix())
-                    # print(camera_R)
-                    # print("")
-                    # print(rot)
-                    # print("")
-                    # print(np.matmul(rot,np.linalg.inv(camera_R)))
-                    
-                  
+                    ### ADD DIRECTION ELEMENTS TO CSV ###
                     # row.append(math.degrees(angle_dpt))
                     for elem in dir_pointC:
                         row.append(elem)
@@ -479,65 +265,62 @@ def process(filenames):
                     row.append(math.radians(rotX))
                     new_csv.append(row)
 
+                    ### CREATE THE TXT FILE FOR YOLO TRAINING ###
                     R = np.array([[row[5],row[6]],[row[7],row[8]]]).astype(np.float64)
                     w = float(row[9])*2
                     h = float(row[10])*2
                     cx = float(row[11])
                     cy = float(row[12])
-                    # unit_vector = np.array([1.0,0.0])
-                    # new_unit = np.matmul(R,unit_vector)
                     angle_obb = math.atan2(R[1,0],R[0,0])
-                    # angle_dpt = -math.atan2(new_unit[1],new_unit[0])
-                    # print(math.degrees(angle_dpt))
-                    corners = xywhr2xyxyxyxy(np.array([cx,cy,w,h,angle_obb]))
+                    corners = utils.xywhr2xyxyxyxy(np.array([cx,cy,w,h,angle_obb]))
                     a=min(w,h)/2
-                    dx=cx+a*math.cos(-angle_dpt)
-                    dy=cy+a*math.sin(-angle_dpt)
+                    dx=cx+a*dir_pointC[0] ### Using pixels the rotation is inverse (angle_dpt is calculated around Z, while in this case it is around -Z)
+                    dy=cy+a*(-dir_pointC[1])
                     if obj.name=='building':
-                        fl.write("1 %f %f %f %f %f %f %f %f %f %f\n"%(corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H))
+                        object_class = 1
                     else:
-                        fl.write("0 %f %f %f %f %f %f %f %f %f %f\n"%(corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H))
+                        object_class = 0
+                    if args.threeD:
+                        dz=a*dir_pointC[0]
+                        fl.write("%d %f %f %f %f %f %f %f %f %f %f %f\n"%(object_class,corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H,dz/H))
+                    else:
+                        fl.write("%d %f %f %f %f %f %f %f %f %f %f\n"%(object_class,corners[0,0]/W,corners[0,1]/H,corners[1,0]/W,corners[1,1]/H,corners[2,0]/W,corners[2,1]/H,corners[3,0]/W,corners[3,1]/H,dx/W,dy/H))
                     if not one_object:
-                        # one_object=True
-                        img_rgb = cv2.ellipse(img_rgb, (int(cx),int(cy)), (int(w/2),int(h/2)), math.degrees(angle_obb), 0, 360, get_color('orange'), 2)
-                        img_rgb = cv2.arrowedLine(img_rgb, (int(cx),int(cy)), (int(dx),int(dy)), get_color('red'), 2)
+                        # one_object=True ### This is in the case when we want to plot only the first object into an image
+                        img_rgb = cv2.ellipse(img_rgb, (int(cx),int(cy)), (int(w/2),int(h/2)), math.degrees(angle_obb), 0, 360, utils.get_color('orange'), 2)
+                        img_rgb = cv2.arrowedLine(img_rgb, (int(cx),int(cy)), (int(dx),int(dy)), utils.get_color('red'), 2)
                     # Tr_obj2world = np.array([[obj.R[0,0],obj.R[0,1],obj.R[0,1],obj.T[0]],[obj.R[1,0],obj.R[1,1],obj.R[1,1],obj.T[1]],[obj.R[2,0],obj.R[2,1],obj.R[2,1],obj.T[2]],[0.0,0.0,0.0,1.0]])
-                    new_vertices_cam = np.zeros_like(obj.vertices)
-                    new_vertices_velo = np.zeros_like(obj.vertices)
-                    new_projected_points = np.zeros((len(obj.vertices),2)).astype(np.int32)
 
-                    fx = camera_K[0,0]
-                    fy = camera_K[1,1]
-                    x0 = camera_K[0,2]
-                    y0 = camera_K[1,2]
-                    for i in range(len(obj.vertices)):
-                        new_vertices_cam[i]=np.matmul(np.linalg.inv(camera_tr),np.concatenate((obj.vertices[i],np.array([1.0]))))[:3]
-                        z = new_vertices_cam[i,2]
-                        u = (new_vertices_cam[i,0]*fx)/z
-                        v = (new_vertices_cam[i,1]*fy)/z
-                        pixel_pos_x = round(u + x0)
-                        pixel_pos_y = round(v + y0)
-
-                        if pixel_pos_x < 0:                    
-                            pixel_pos_x = -pixel_pos_x
-                        
-                        if pixel_pos_x > camera_width - 1:                    
-                            pixel_pos_x = camera_width - 1
-                        
-                        if pixel_pos_y < 0:
-                            pixel_pos_y = -pixel_pos_y
-                        
-                        if pixel_pos_y > camera_height - 1:
-                            pixel_pos_y = camera_height - 1
-                        
-                        new_projected_points[i,0] = pixel_pos_x
-                        new_projected_points[i,1] = pixel_pos_y
-                        
-                        new_vertices_velo[i]=np.matmul(cam2velo,np.concatenate((new_vertices_cam[i],np.array([1.0]))))[:3]
-                        # img_rgb = cv2.circle(img_rgb, (pixel_pos_x,pixel_pos_y), 1, get_color(counter), 1)
-                    # for i in range(len(obj.lines)):
-                    #     img_rgb = cv2.line(img_rgb, (new_projected_points[obj.lines[i][0],0],new_projected_points[obj.lines[i][0],1]), (new_projected_points[obj.lines[i][1],0],new_projected_points[obj.lines[i][1],1]),get_color(counter), 1)
-                    counter+=1
+                    ### PLOTTING 3D BB in the image
+                    if args.plotBB:
+                        new_vertices_cam = np.zeros_like(obj.vertices)
+                        new_vertices_velo = np.zeros_like(obj.vertices)
+                        new_projected_points = np.zeros((len(obj.vertices),2)).astype(np.int32)
+                        fx = camera_K[0,0]
+                        fy = camera_K[1,1]
+                        x0 = camera_K[0,2]
+                        y0 = camera_K[1,2]
+                        for i in range(len(obj.vertices)):
+                            new_vertices_cam[i]=np.matmul(np.linalg.inv(camera_tr),np.concatenate((obj.vertices[i],np.array([1.0]))))[:3]
+                            z = new_vertices_cam[i,2]
+                            u = (new_vertices_cam[i,0]*fx)/z
+                            v = (new_vertices_cam[i,1]*fy)/z
+                            pixel_pos_x = round(u + x0)
+                            pixel_pos_y = round(v + y0)
+                            if pixel_pos_x < 0:                    
+                                pixel_pos_x = -pixel_pos_x                        
+                            if pixel_pos_x > camera_width - 1:                    
+                                pixel_pos_x = camera_width - 1                        
+                            if pixel_pos_y < 0:
+                                pixel_pos_y = -pixel_pos_y                        
+                            if pixel_pos_y > camera_height - 1:
+                                pixel_pos_y = camera_height - 1                        
+                            new_projected_points[i,0] = pixel_pos_x
+                            new_projected_points[i,1] = pixel_pos_y                        
+                            new_vertices_velo[i]=np.matmul(cam2velo,np.concatenate((new_vertices_cam[i],np.array([1.0]))))[:3] ### In case you need the coordinates in the velodyne
+                            # img_rgb = cv2.circle(img_rgb, (pixel_pos_x,pixel_pos_y), 1, utils.get_color(counter), 1)
+                        # for i in range(len(obj.lines)):
+                        #     img_rgb = cv2.line(img_rgb, (new_projected_points[obj.lines[i][0],0],new_projected_points[obj.lines[i][0],1]), (new_projected_points[obj.lines[i][1],0],new_projected_points[obj.lines[i][1],1]),utils.get_color(counter), 1)
 
         ### Object points in the velodyne pcd: new_vertices_velo
         ### Object x vector in the velodyne pcd objX0velo,objX1velo,objX10velo
@@ -559,4 +342,4 @@ def main():
             p.start()
       
 if __name__ == "__main__": 
-    main() 
+    main()
