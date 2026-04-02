@@ -85,12 +85,17 @@ class Camera:
     def __call__(self, obj3d, frameId):
 
         vertices = obj3d.vertices
+        heading = obj3d.heading
 
         uv, depth = self.project_vertices(vertices, frameId)
 
         obj3d.vertices_proj = uv
         obj3d.vertices_depth = depth 
         obj3d.generateMeshes()
+
+        uv_heading, depth_heading = self.project_vertices(heading, frameId)
+        obj3d.heading_proj = uv_heading
+        obj3d.heading_depth = depth_heading
 
 
 class CameraPerspective(Camera):
@@ -142,8 +147,8 @@ class CameraPerspective(Camera):
         points_proj = np.matmul(self.K[:3,:3].reshape([1,3,3]), points)
         depth = points_proj[:,2,:]
         depth[depth==0] = -1e-6
-        u = np.round(points_proj[:,0,:]/np.abs(depth)).astype(int)
-        v = np.round(points_proj[:,1,:]/np.abs(depth)).astype(int)
+        u = np.round(points_proj[:,0,:]/np.abs(depth)).astype(np.int32)
+        v = np.round(points_proj[:,1,:]/np.abs(depth)).astype(np.int32)
 
         if ndim==2:
             u = u[0]; v=v[0]; depth=depth[0]

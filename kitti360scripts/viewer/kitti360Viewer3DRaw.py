@@ -186,8 +186,8 @@ def projectVeloToImage(cam_id=0, seq=0):
         pointsCam = pointsCam[:,:3]
         # project to image space
         u,v, depth= camera.cam2image(pointsCam.T)
-        u = u.astype(int)
-        v = v.astype(int)
+        u = u.astype(np.int32)
+        v = v.astype(np.int32)
 
         # prepare depth map for visualization
         depthMap = np.zeros((camera.height, camera.width))

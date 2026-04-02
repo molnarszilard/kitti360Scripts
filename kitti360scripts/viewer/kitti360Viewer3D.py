@@ -29,6 +29,7 @@ from scipy import interpolate
 import struct
 # parse arguments
 import argparse
+import math
 try:
     import matplotlib.colors
     from PIL import PILLOW_VERSION
@@ -110,6 +111,7 @@ class Kitti360Viewer3D(object):
         self.bboxes = []
         self.bboxes_window = []
         self.accumuData = []
+        self.names = []
 
 
     def getColor(self, idx):
@@ -244,6 +246,38 @@ class Kitti360Viewer3D(object):
                 mesh.compute_vertex_normals()
                 self.bboxes.append( mesh )
                 self.bboxes_window.append([obj.start_frame, obj.end_frame])
+                
+                for i in range(4):
+                    mesh_sphere = open3d.geometry.TriangleMesh.create_sphere(radius=0.1)
+                    mesh_sphere.paint_uniform_color([0.0, 0.0, 0.0])
+                    target_location = vertices[i]
+                    mesh_sphere.translate(target_location)
+                    mesh_sphere.rotate(obj.R, center=target_location)
+                    mesh_sphere.compute_vertex_normals()
+                    self.bboxes.append( mesh_sphere )                
+                
+                face_vertex = vertices[0:4].mean(axis=0)
+                arrow_mesh = open3d.geometry.TriangleMesh.create_arrow(
+                    cylinder_radius=0.1,
+                    cone_radius=0.5,
+                    cylinder_height=1.0,
+                    cone_height=1.0
+                )
+                target_location = face_vertex
+                # arrow_mesh.rotate(obj.R, center=[0,0,0])
+                arrow_mesh.translate(target_location)
+                R = arrow_mesh.get_rotation_matrix_from_xyz((0, np.pi/2, 0))
+                arrow_mesh.rotate(R, center=target_location)
+                objX1w=np.matmul(obj.R,np.array([1.0,0.0,0.0])) ### Object direction vector in world
+                objX1w[2]*=0 ### In 2d we need to drop the Z coordinate to the XY plane
+                objX1w = objX1w / np.linalg.norm(objX1w) ### obj.R has scaling built in, let's create a unit vector
+                theta=math.atan2(objX1w[1],objX1w[0])
+                R = arrow_mesh.get_rotation_matrix_from_xyz((0, 0, theta))
+                arrow_mesh.rotate(R, center=target_location)
+                arrow_mesh.paint_uniform_color([1.0, 0.0, 0.0])
+                arrow_mesh.compute_vertex_normals()
+                self.bboxes.append( arrow_mesh )
+                self.names.append(obj.name)
 
     def loadBoundingBoxWireframes(self):
 
@@ -291,11 +325,11 @@ class Kitti360Viewer3D(object):
 if __name__=='__main__':
 
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--sequence', type=int, default=0, 
+    parser.add_argument('--sequence', type=int, default=10, 
                                 help='The sequence to visualize')
     parser.add_argument('--mode', choices=['rgb', 'semantic', 'instance', 'confidence', 'bbox'], default='semantic',
                                 help='The modality to visualize')
-    parser.add_argument('--max_bbox', type=int, default=100,
+    parser.add_argument('--max_bbox', type=int, default=2000,
                                 help='The maximum number of bounding boxes to visualize')
 
     args = parser.parse_args()
@@ -304,6 +338,9 @@ if __name__=='__main__':
 
     if args.mode=='bbox':
         v.loadBoundingBoxes()
+        u_names,c_names = np.unique(np.asarray(v.names), return_counts=True)
+        print(u_names)
+        print(c_names)        
 
     if args.mode!='bbox':
 

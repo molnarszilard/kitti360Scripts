@@ -28,7 +28,7 @@ MAX_N = 1000
 def local2global(semanticId, instanceId):
     globalId = semanticId*MAX_N + instanceId
     if isinstance(globalId, np.ndarray):
-        return globalId.astype(int)
+        return globalId.astype(np.int32)
     else:
         return int(globalId)
 
@@ -36,7 +36,7 @@ def global2local(globalId):
     semanticId = globalId // MAX_N
     instanceId = globalId % MAX_N
     if isinstance(globalId, np.ndarray):
-        return semanticId.astype(int), instanceId.astype(int)
+        return semanticId.astype(np.int32), instanceId.astype(np.int32)
     else:
         return int(semanticId), int(instanceId)
 
@@ -79,6 +79,8 @@ class KITTI360Bbox3D(KITTI360Object):
         self.lines = [[0,5],[1,4],[2,7],[3,6],
                       [0,1],[1,3],[3,2],[2,0],
                       [4,5],[5,7],[7,6],[6,4]]
+        self._heading = np.array([[0.,0.,0.],
+                                 [1.,0.,0.]])
 
         # the ID of the corresponding object
         self.semanticId = -1
@@ -134,6 +136,7 @@ class KITTI360Bbox3D(KITTI360Object):
         self.faces = faces
         self.R = R
         self.T = T
+        self.heading = np.matmul(R, self._heading.transpose()).transpose() + T
 
     def parseBbox(self, child):
         semanticIdKITTI = int(child.find('semanticId').text)
@@ -354,18 +357,18 @@ class Annotation2DInstance:
 # Meta class for KITTI360Bbox3D
 class Annotation3D:
     # Constructor
-    def __init__(self, labelDir='', sequence='', list_objects = True):
+    def __init__(self, labelDir='', sequence=''):
 
         labelPath = glob.glob(os.path.join(labelDir, '*', '%s.xml' % sequence)) # train or test
-        if len(labelPath)!=1:
+        if len(labelPath)<1:
             raise RuntimeError('%s does not exist! Please specify KITTI360_DATASET in your environment path.' % labelPath)
         else:
-            labelPath = labelPath[0]
+            labelPath = labelPath[-1]
             print('Loading %s...' % labelPath)
 
-        self.init_instance(labelPath,list_objects=list_objects)
+        self.init_instance(labelPath)
 
-    def init_instance(self, labelPath,list_objects=True):
+    def init_instance(self, labelPath):
         # load annotation
         tree = ET.parse(labelPath)
         root = tree.getroot()
@@ -385,10 +388,9 @@ class Annotation3D:
 
         globalIds = np.asarray(list(self.objects.keys()))
         semanticIds, instanceIds = global2local(globalIds)
-        if list_objects:
-            for label in labels:
-                if label.hasInstances:
-                    print(f'{label.name:<30}:\t {(semanticIds==label.id).sum()}')
+        for label in labels:
+            if label.hasInstances:
+                print(f'{label.name:<30}:\t {(semanticIds==label.id).sum()}')
         print(f'Loaded {len(globalIds)} instances')
         print(f'Loaded {self.num_bbox} boxes')
 
@@ -404,10 +406,7 @@ class Annotation3D:
                     return None
             # dynamic object
             else:
-                if timestamp in self.objects[globalId].keys():
-                    return self.objects[globalId][timestamp]
-                else:
-                    return None
+                return self.objects[globalId][timestamp]
         else:
             return None
 
