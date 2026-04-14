@@ -30,6 +30,7 @@ import struct
 # parse arguments
 import argparse
 import math
+from scipy.spatial import KDTree
 try:
     import matplotlib.colors
     from PIL import PILLOW_VERSION
@@ -238,7 +239,21 @@ class Kitti360Viewer3D(object):
                 vertices=obj.vertices
                 faces=obj.faces
                 mesh = open3d.geometry.TriangleMesh()
-                mesh.vertices = open3d.utility.Vector3dVector(obj.vertices)
+                if obj.name in ['building','garage']:
+                    new_vertices = vertices.copy()
+                    tree = KDTree(new_vertices[:4])
+                    distances, indices = tree.query(new_vertices[4:], k=1)
+                    # print("Distances:")
+                    # print(distances)
+                    # print(indices)
+                    for i_vect in range(len(indices)):
+                        distance_to_move = 3.0
+                        direction = new_vertices[4+indices[i_vect]] - new_vertices[indices[i_vect]]
+                        unit_vector = direction / np.linalg.norm(direction)
+                        new_vertices[4+indices[i_vect]] = new_vertices[indices[i_vect]] + (unit_vector * distance_to_move)
+                    mesh.vertices = open3d.utility.Vector3dVector(new_vertices)
+                else:
+                    mesh.vertices = open3d.utility.Vector3dVector(obj.vertices)
                 mesh.triangles = open3d.utility.Vector3iVector(obj.faces)
                 color = self.assignColor(globalId, 'semantic')
                 semanticId, instanceId = global2local(globalId)
